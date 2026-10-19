@@ -4,7 +4,7 @@
 struct Backend:lrx::IO {
   uint32_t hash=100;
   bool save(const lrx::Journal& j) override {return lrx::valid(j);}
-  bool send(const uint8_t*,const char*,uint32_t& ack) override {ack=++hash;return true;}
+  bool send(const uint8_t*,const char*,uint32_t& ack,uint32_t& timeout) override {ack=++hash;timeout=10000;return true;}
 };
 int main(){
   Backend backend;lrx::Receiver receiver(backend);receiver.begin(nullptr,0);

@@ -78,7 +78,7 @@ owner provides no such receipt. A return event never removes the PC snapshot.
 ## Durability and replay
 
 RX commits snapshot plus pending return before ARRIVED, holds four seconds,
-then tries RETURN C at most four times at ten-second spacing. Early RECALL makes
+then tries RETURN C at most four times at at least ten-second spacing (or the longer radio timeout). Early RECALL makes
 return due immediately. A duplicate/late transaction never restarts the hold.
 On reboot, captured return jobs become due immediately; attempt budget persists.
 A missing contact consumes bounded attempts and stays unresolved, not rerouted.

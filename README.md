@@ -20,7 +20,7 @@ separate project; this repository does not introduce a new sender wire format.
 - Existing LFG1 REQ/ACK/COMMIT/ARRIVED/RECALL/RETURN protocol; RETURN uses colour
   mode `C` even though the receiver's own screen is monochrome.
 - Durable snapshot outbox, replay after reconnect, and independent return status.
-- Four bounded return attempts, ten seconds apart; unresolved jobs remain visible.
+- Four bounded return attempts, at least at least ten seconds apart (or the longer radio timeout); unresolved jobs remain visible.
 - Dedicated status screen instead of aquarium, care, breeding, or pet setup.
 - Ordinary MeshCore contact/channel inbox and radio configuration remain available.
 

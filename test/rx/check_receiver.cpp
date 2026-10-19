@@ -5,10 +5,10 @@
 #include <iostream>
 #include <fstream>
 struct Fake:lrx::IO {
-  lrx::Journal saved{};bool fail=false;uint32_t hash=100,writes=0;
+  lrx::Journal saved{};bool fail=false;uint32_t hash=100,writes=0,estimate=10000;bool sendFailure=false;
   std::vector<std::string> sent;std::vector<uint8_t> owners;
   bool save(const lrx::Journal& j) override {++writes;if(fail)return false;saved=j;return true;}
-  bool send(const uint8_t owner[32],const char* text,uint32_t& ack) override {sent.emplace_back(text);owners.push_back(owner[0]);ack=++hash;return true;}
+  bool send(const uint8_t owner[32],const char* text,uint32_t& ack,uint32_t& timeout) override {sent.emplace_back(text);owners.push_back(owner[0]);ack=++hash;timeout=estimate;return !sendFailure;}
 };
 static uint8_t owner[32]={1},other[32]={2},rx[32]={3};
 static int cases=0;
@@ -151,6 +151,21 @@ int main(int argc,char** argv){
     lrx::Receiver reboot(io);reboot.begin(&io.saved,0);reboot.tick(0);
     assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1");
     PASS("AQUARIUM1 only follows durable capture, survives restart and later save failure; cancellation is unmarked");
+  }
+  {
+    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);intake(r);io.estimate=45000;
+    r.tick(4001);const auto first=io.hash;r.tick(14001);assert(r.data.slots[0].attempts==1);
+    r.tick(49001);assert(r.data.slots[0].attempts==2 && r.acknowledgeRadio(first));
+    assert(!r.acknowledgeRadio(first));
+    PASS("estimated long-path timeout delays retries; earlier attempt ACK completes once");
+  }
+  {
+    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);intake(r);assert(!r.acknowledgeRadio(0));
+    io.hash=UINT32_MAX;r.tick(4001);assert(r.acknowledgeRadio(0));
+    Fake failed;lrx::Receiver otherReceiver(failed);otherReceiver.begin(nullptr,0);intake(otherReceiver);
+    failed.hash=UINT32_MAX;failed.sendFailure=true;otherReceiver.tick(4001);
+    assert(!otherReceiver.acknowledgeRadio(0));
+    PASS("zero is a valid queued ACK hash, not an unused or failed-send entry");
   }
   std::cout<<cases<<" production-core scenarios passed\n";
 }

@@ -44,10 +44,9 @@ struct Files : lrx::JournalFiles {
 lrx::JournalStore journalStore(files);
 struct Backend : lrx::IO {
   bool save(const lrx::Journal& journal) override { return journalStore.save(journal); }
-  bool send(const uint8_t owner[32], const char* text, uint32_t& ack) override {
+  bool send(const uint8_t owner[32], const char* text, uint32_t& ack, uint32_t& timeout) override {
     auto* contact = the_mesh.lookupContactByPubKey(owner, 32);
     if (!contact) return false;
-    uint32_t timeout = 0;
     return the_mesh.sendMessage(*contact, the_mesh.getRTCClock()->getCurrentTime(),
                                0, text, ack, timeout) >= 0;
   }

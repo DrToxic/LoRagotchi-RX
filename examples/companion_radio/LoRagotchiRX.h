@@ -49,12 +49,13 @@ inline bool parseUnsigned(const char* text,uint32_t maximum,uint32_t& value) {
 }
 struct IO {
   virtual bool save(const Journal& journal)=0;
-  virtual bool send(const uint8_t owner[32], const char* text, uint32_t& ack)=0;
+  virtual bool send(const uint8_t owner[32], const char* text, uint32_t& ack, uint32_t& timeout)=0;
   virtual ~IO() {}
 };
 class Receiver {
   IO& io;
   uint32_t due[CAPACITY]={}, ack[CAPACITY][4]={};
+  bool ackKnown[CAPACITY][4]={};
   bool capturedDurably[CAPACITY]={};
   uint32_t lease=0, leaseUntil=0, saveRetry=0;
   bool storageOK=true, storageBlocked=false;
@@ -72,9 +73,9 @@ class Receiver {
     return s.state && s.tx==tx && s.fish==fish && !memcmp(s.owner,owner,32);
   }
   void reply(const uint8_t* owner,const char* verb,uint32_t tx,uint32_t fish,bool aquarium=false) {
-    char msg[80]; uint32_t unused=0;
+    char msg[80]; uint32_t unused=0,timeout=0;
     snprintf(msg,sizeof(msg),"LFG1|%s|%lu|%lu%s",verb,(unsigned long)tx,(unsigned long)fish,
-        !strcmp(verb,"RETURN")?(aquarium?"|C|AQUARIUM1":"|C"):""); io.send(owner,msg,unused);
+        !strcmp(verb,"RETURN")?(aquarium?"|C|AQUARIUM1":"|C"):""); io.send(owner,msg,unused,timeout);
   }
   int reusable() const {
     for(int i=0;i<CAPACITY;++i) if(data.slots[i].state==Empty)return i;
@@ -135,6 +136,7 @@ class Receiver {
       s.state=Reserved;s.body=s.scales=s.eyes=6;s.tint=0xffff;s.mode='M';
       if(n>=6)strncpy(s.name,fields[5],sizeof(s.name)-1);
       due[index]=now+RESERVE_MS;memset(ack[index],0,sizeof(ack[index]));
+      memset(ackKnown[index],0,sizeof(ackKnown[index]));
       reply(owner,"ACK",tx,fish);return true;
     }
     if(index<0)return true; // unsolicited/late COMMIT cannot create a fish
@@ -168,13 +170,16 @@ class Receiver {
       char msg[80];snprintf(msg,sizeof(msg),"LFG1|RETURN|%lu|%lu|C%s",(unsigned long)s.tx,(unsigned long)s.fish,
           capturedDurably[i]?"|AQUARIUM1":"");
       uint8_t attempt=s.attempts++;persist(); // attempt budget survives reset
-      uint32_t hash=0;if(io.send(s.owner,msg,hash))ack[i][attempt]=hash;
-      due[i]=now+RETRY_MS;
+      uint32_t hash=0,timeout=0,wait=RETRY_MS;
+      if(io.send(s.owner,msg,hash,timeout)) {
+        ack[i][attempt]=hash;ackKnown[i][attempt]=true;
+        if(timeout>wait)wait=timeout>0x7fffffffUL?0x7fffffffUL:timeout;
+      }
+      due[i]=now+wait;
     }
   }
   bool acknowledgeRadio(uint32_t hash) {
-    if(!hash)return false;
-    for(int i=0;i<CAPACITY;i++)for(uint32_t expected:ack[i])if(expected==hash &&
+    for(int i=0;i<CAPACITY;i++)for(int attempt=0;attempt<4;++attempt)if(ackKnown[i][attempt] && ack[i][attempt]==hash &&
         (data.slots[i].state==Captured || data.slots[i].state==Unresolved)) {
       data.slots[i].state=Delivered;data.slots[i].statusId=data.nextId++;data.slots[i].statusUploaded=0;persist();return true;
     }

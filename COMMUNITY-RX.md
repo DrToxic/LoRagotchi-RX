@@ -44,7 +44,7 @@ COMMIT retry cannot replace known genes with missing data. Duplicate messages do
 not create another snapshot or restart the hold.
 
 After four seconds RX sends RETURN C. Early RECALL accelerates it. There are at
-most four scheduled attempts spaced ten seconds apart, independent of the PC;
+most four scheduled attempts spaced at least at least ten seconds apart (or the longer radio timeout), independent of the PC;
 radio acknowledgements indicate transport delivery, not a new application-level
 HOME receipt. Captured jobs become due immediately after RX reboot. Failed returns
 remain unresolved; LRX/1 op 6 allows an explicit retry (not yet an aquarium UI
