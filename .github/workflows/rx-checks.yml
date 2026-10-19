@@ -71,7 +71,13 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install platformio==6.1.19
-      - run: pio run -e ${{ matrix.environment }} -t ${{ matrix.target }} -j 1
+      - name: Build selected receiver
+        run: |
+          if [ "${{ matrix.target }}" = "create_uf2" ]; then
+            pio run -e ${{ matrix.environment }} -t create_uf2 -j 1
+          else
+            pio run -e ${{ matrix.environment }} -j 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.environment }}-${{ github.sha }}
