@@ -1,4 +1,5 @@
 #include "MyMesh.h"
+#include "LoRagotchiRXBridge.h"
 #ifdef ESP32
 #include <Preferences.h>
 #endif
@@ -507,6 +508,11 @@ void MyMesh::onContactPathUpdated(const ContactInfo &contact) {
 }
 
 ContactInfo*  MyMesh::processAck(const uint8_t *data) {
+#ifdef LORAGOTCHI_RX
+  uint32_t rxHash;
+  memcpy(&rxHash, data, sizeof(rxHash));
+  loragotchiRXAck(rxHash);
+#endif
   if (_listener) {
     uint32_t ack_crc;
     memcpy(&ack_crc, data, 4);
@@ -531,6 +537,9 @@ ContactInfo*  MyMesh::processAck(const uint8_t *data) {
 
 void MyMesh::queueMessage(const ContactInfo &from, uint8_t txt_type, mesh::Packet *pkt,
                           uint32_t sender_timestamp, const uint8_t *extra, int extra_len, const char *text) {
+#ifdef LORAGOTCHI_RX
+  if (loragotchiRXReceive(from.id.pub_key, text)) return;
+#endif
 #ifdef LORAFISH_UI
   if (text && strncmp(text,"LFG1|",5)==0) {
     unsigned long tx=0,fid=0;
@@ -1260,6 +1269,13 @@ void MyMesh::startInterface(BaseSerialInterface &serial) {
 }
 
 void MyMesh::handleCmdFrame(size_t len) {
+#ifdef LORAGOTCHI_RX
+  const size_t rxLen = loragotchiRXCommand(cmd_frame, len, out_frame, self_id.pub_key);
+  if (rxLen) {
+    _serial->writeFrame(out_frame, rxLen);
+    return;
+  }
+#endif
   if (cmd_frame[0] == CMD_DEVICE_QUERY && len >= 2) { // sent when app establishes connection
     app_target_ver = cmd_frame[1];                    // which version of protocol does app understand
 
@@ -2639,6 +2655,9 @@ void MyMesh::checkSerialInterface() {
 
 void MyMesh::loop() {
   BaseChatMesh::loop();
+#ifdef LORAGOTCHI_RX
+  loragotchiRXTick();
+#endif
 
   if (_cli_rescue) {
     checkCLIRescueCmd();

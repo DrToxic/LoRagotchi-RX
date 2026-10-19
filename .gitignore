@@ -23,3 +23,7 @@ platformio.local.ini
 .pio/
 .vscode/
 *.bin
+
+# RX local verification and firmware handoff
+.local-dev/
+dist/

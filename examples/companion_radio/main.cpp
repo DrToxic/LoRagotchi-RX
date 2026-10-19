@@ -1,6 +1,7 @@
 #include <Arduino.h>   // needed for PlatformIO
 #include <Mesh.h>
 #include "MyMesh.h"
+#include "LoRagotchiRXBridge.h"
 
 // Believe it or not, this std C function is busted on some platforms!
 static uint32_t _atoi(const char* sp) {
@@ -169,7 +170,12 @@ void setup() {
   fast_rng.begin(radio_driver.getRngSeed());
 
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
+#ifdef LORAGOTCHI_RX
+  // Bypass the wrapper's auto-format fallback on a corrupt filesystem.
+  if (!InternalFS.Adafruit_LittleFS::begin()) { halt(); }
+#else
   InternalFS.begin();
+#endif
   #if defined(QSPIFLASH)
     if (!QSPIFlash.begin()) {
       // debug output might not be available at this point, might be too early. maybe should fall back to InternalFS here?
@@ -179,7 +185,11 @@ void setup() {
     }
   #else
   #if defined(EXTRAFS)
+#ifdef LORAGOTCHI_RX
+      if (!ExtraFS.Adafruit_LittleFS::begin()) { halt(); }
+#else
       ExtraFS.begin();
+#endif
   #endif
   #endif
   store.begin();
@@ -190,7 +200,12 @@ void setup() {
   the_mesh.begin();
 #elif defined(ESP32)
   TDECK_BOOT_TRACE("SPIFFS mount begin");
+#ifdef LORAGOTCHI_RX
+  // Do not auto-format an RX journal on a mount failure.
+  if(!SPIFFS.begin(false)) { halt(); }
+#else
   SPIFFS.begin(true);
+#endif
   TDECK_BOOT_TRACE("SPIFFS mount end");
   TDECK_BOOT_TRACE("datastore begin");
   store.begin();
@@ -199,6 +214,10 @@ void setup() {
   TDECK_BOOT_TRACE("mesh ready");
 #else
   #error "need to define filesystem"
+#endif
+
+#ifdef LORAGOTCHI_RX
+  loragotchiRXBegin();
 #endif
 
 #ifdef LORAFISH_UI

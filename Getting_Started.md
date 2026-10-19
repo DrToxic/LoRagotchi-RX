@@ -1,3 +1,6 @@
+> This is the inherited **DX pet-firmware** guide. For this receiver project, use
+> [LoRagotchi-RX setup](COMMUNITY-RX.md) and the [RX README](README.md).
+
 ## Getting Started with LoRaGotchi DX
 
 Thank you for downloading and trying our firmware! LoRaGotchi DX is a virtual pet running as a MeshCore BLE companion. The firmware uses the device's LoRa radio and display for the aquarium, and can exchange visiting fish with compatible LoRaGotchi DX peers over the mesh.

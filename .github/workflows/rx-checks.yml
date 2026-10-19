@@ -1,0 +1,82 @@
+name: LoRagotchi-RX checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install platformio==6.1.19
+      - name: Production receiver fault tests
+        run: |
+          mkdir -p .local-dev
+          g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -I . test/rx/check_receiver.cpp -o .local-dev/check_receiver
+          .local-dev/check_receiver
+          g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -I . test/rx/check_journal.cpp -o .local-dev/check_journal
+          .local-dev/check_journal
+          python3 test/rx/check_targets.py
+      - uses: actions/checkout@v4
+        with:
+          repository: DrToxic/LoRagotchi-Aquarium
+          ref: c5e51755db035792f38e1a7c803079776f960916
+          path: .local-dev/aquarium
+      - name: Aquarium v0.1.5 protocol integration
+        run: python3 test/rx/check_aquarium.py .local-dev/aquarium
+      - run: pio test -e native -e native_kiss_modem
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: Heltec_v3_LoRagotchi_RX_usb
+            target: build
+          - environment: Heltec_v3_LoRagotchi_RX_ble
+            target: build
+          - environment: heltec_v4_LoRagotchi_RX_usb
+            target: build
+          - environment: heltec_v4_LoRagotchi_RX_ble
+            target: build
+          - environment: ThinkNode_M2_LoRagotchi_RX_usb
+            target: build
+          - environment: ThinkNode_M2_LoRagotchi_RX_ble
+            target: build
+          - environment: Heltec_t096_LoRagotchi_RX_usb
+            target: create_uf2
+          - environment: Heltec_t096_LoRagotchi_RX_ble
+            target: create_uf2
+          - environment: Heltec_t114_LoRagotchi_RX_usb
+            target: create_uf2
+          - environment: Heltec_t114_LoRagotchi_RX_ble
+            target: create_uf2
+          - environment: Tbeam_SX1262_LoRagotchi_RX_usb
+            target: build
+          - environment: Tbeam_SX1262_LoRagotchi_RX_ble
+            target: build
+          - environment: Tbeam_SX1276_LoRagotchi_RX_usb
+            target: build
+          - environment: Tbeam_SX1276_LoRagotchi_RX_ble
+            target: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install platformio==6.1.19
+      - run: pio run -e ${{ matrix.environment }} -t ${{ matrix.target }} -j 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.environment }}-${{ github.sha }}
+          path: |
+            .pio/build/${{ matrix.environment }}/firmware.bin
+            .pio/build/${{ matrix.environment }}/partitions.bin
+            .pio/build/${{ matrix.environment }}/firmware.uf2
+          if-no-files-found: error
