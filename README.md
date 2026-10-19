@@ -96,3 +96,15 @@ Shared MeshCore `src/`, board pins, RF defaults, and partition layouts are uncha
 The original pet-firmware README is preserved as [README-DX.md](README-DX.md).
 Inherited release/site automation is archived under `.github/inherited-workflows/`;
 active CI checks only RX and native tests, with no release or deployment step.
+
+## DX community-return marker
+
+For a durably captured aquarium visit, RX sends
+`LFG1|RETURN|tx|fish|C|AQUARIUM1`, matching the DX host-return contract. Legacy
+owners ignore the suffix; updated DX owns reward eligibility and cooldown. RX
+does not calculate or promise a reward. Cancelled reservations and returns before
+any successful snapshot save use plain `C`, without `AQUARIUM1`. A validated
+recovered snapshot remains eligible even if a later status write fails. The PC
+need not be connected: this marker claims receiver acceptance, not PC persistence.
+
+The existing LRX/1 PC event schema and version-1 journal layout are unchanged.

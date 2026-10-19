@@ -45,8 +45,8 @@ int main(int argc,char** argv){
     Fake io;lrx::Receiver r(io);assert(r.begin(nullptr,0));intake(r);assert(io.sent.back()=="LFG1|ARRIVED|7|8");
     assert(r.data.slots[0].body==1 && r.data.slots[0].appearance);uint32_t eid=r.nextEvent();assert(eid);
     auto writes=io.writes;r.receive(owner,"LFG1|COMMIT|7|8",1000);assert(r.data.slots[0].body==1 && r.nextEvent()==eid && writes==io.writes);
-    r.tick(4000);assert(io.sent.back()=="LFG1|ARRIVED|7|8");r.tick(4001);assert(io.sent.back()=="LFG1|RETURN|7|8|C");
-    r.receive(owner,"LFG1|COMMIT|7|8",5000);assert(io.sent.back()=="LFG1|RETURN|7|8|C");assert(r.data.slots[0].attempts==1);
+    r.tick(4000);assert(io.sent.back()=="LFG1|ARRIVED|7|8");r.tick(4001);assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1");
+    r.receive(owner,"LFG1|COMMIT|7|8",5000);assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1");assert(r.data.slots[0].attempts==1);
     assert(r.acknowledgeRadio(104));assert(r.data.slots[0].state==lrx::Delivered && r.nextEvent()==eid);
     PASS("colour capture, short duplicate, fixed hold, late COMMIT returns without resurrection, PC-independent RETURN");
     assert(command(r,0)[5]==0);assert(command(r,0,{},2)[5]==2);assert(command(r,0,{},2,16000)[5]==0);
@@ -67,7 +67,7 @@ int main(int argc,char** argv){
   }
   {
     Fake io;lrx::Receiver r(io);r.begin(nullptr,0);intake(r);uint32_t eid=r.nextEvent();
-    lrx::Receiver restart(io);restart.begin(&io.saved,100);restart.tick(100);assert(io.sent.back()=="LFG1|RETURN|7|8|C" && restart.nextEvent()==eid);
+    lrx::Receiver restart(io);restart.begin(&io.saved,100);restart.tick(100);assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1" && restart.nextEvent()==eid);
     for(int i=1;i<=4;i++)restart.tick(100+i*10000);assert(restart.data.slots[0].state==lrx::Unresolved && restart.data.slots[0].attempts==4);
     lrx::Receiver reboot(io);reboot.begin(&io.saved,0);auto count=io.sent.size();reboot.tick(100000);assert(io.sent.size()==count);
     PASS("reset during hold prioritises return, four attempts persisted, exhausted jobs never evaporate");
@@ -112,7 +112,7 @@ int main(int argc,char** argv){
     command(r,0);command(r,4,id(r.data.slots[0].id));command(r,4,id(r.data.slots[0].statusId));
     for(uint8_t k=2;k<=4;k++){uint8_t key[32]={k};intake(r,key);}
     uint8_t fifth[32]={5};intake(r,fifth);auto n=r.data.nextId;
-    r.receive(owner,"LFG1|COMMIT|7|8|C|1|3|5|2016",20);assert(io.sent.back()=="LFG1|RETURN|7|8|C" && r.data.nextId==n);
+    r.receive(owner,"LFG1|COMMIT|7|8|C|1|3|5|2016",20);assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1" && r.data.nextId==n);
     PASS("malformed IDs rejected; evicted completed transaction tombstone rejects stale COMMIT");
   }
   {
@@ -141,6 +141,16 @@ int main(int argc,char** argv){
     r.tick(start+4001);for(const auto& s:r.data.slots)assert(s.attempts==1);
     assert(io.owners[io.owners.size()-4]==1 && io.owners.back()==4);
     PASS("all four concurrent visitors return independently across millis wrap");
+  }
+  {
+    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);
+    r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);r.receive(owner,"LFG1|RECALL|7|8",1);
+    assert(io.sent.back()=="LFG1|RETURN|7|8|C");
+    intake(r);io.fail=true;r.tick(4001);
+    assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1"); // earlier capture remains durable
+    lrx::Receiver reboot(io);reboot.begin(&io.saved,0);reboot.tick(0);
+    assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1");
+    PASS("AQUARIUM1 only follows durable capture, survives restart and later save failure; cancellation is unmarked");
   }
   std::cout<<cases<<" production-core scenarios passed\n";
 }

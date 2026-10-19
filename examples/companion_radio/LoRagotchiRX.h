@@ -55,6 +55,7 @@ struct IO {
 class Receiver {
   IO& io;
   uint32_t due[CAPACITY]={}, ack[CAPACITY][4]={};
+  bool capturedDurably[CAPACITY]={};
   uint32_t lease=0, leaseUntil=0, saveRetry=0;
   bool storageOK=true, storageBlocked=false;
   static bool reached(uint32_t now,uint32_t at) {return int32_t(now-at)>=0;}
@@ -62,15 +63,18 @@ class Receiver {
   static void put32(uint8_t* p,uint32_t v) {for(int i=0;i<4;i++)p[i]=v>>(8*i);}
   bool persist() {
     ++data.generation; data.checksum=checksum(data);
-    storageOK=io.save(data); return storageOK;
+    storageOK=io.save(data);
+    if(storageOK)for(int i=0;i<CAPACITY;++i)
+      if(data.slots[i].state>=Captured)capturedDurably[i]=true;
+    return storageOK;
   }
   bool same(const Slot& s,const uint8_t* owner,uint32_t tx,uint32_t fish) const {
     return s.state && s.tx==tx && s.fish==fish && !memcmp(s.owner,owner,32);
   }
-  void reply(const uint8_t* owner,const char* verb,uint32_t tx,uint32_t fish) {
+  void reply(const uint8_t* owner,const char* verb,uint32_t tx,uint32_t fish,bool aquarium=false) {
     char msg[80]; uint32_t unused=0;
     snprintf(msg,sizeof(msg),"LFG1|%s|%lu|%lu%s",verb,(unsigned long)tx,(unsigned long)fish,
-        !strcmp(verb,"RETURN")?"|C":""); io.send(owner,msg,unused);
+        !strcmp(verb,"RETURN")?(aquarium?"|C|AQUARIUM1":"|C"):""); io.send(owner,msg,unused);
   }
   int reusable() const {
     for(int i=0;i<CAPACITY;++i) if(data.slots[i].state==Empty)return i;
@@ -89,7 +93,10 @@ class Receiver {
   }
   bool begin(const Journal* saved,uint32_t now,bool allowFresh=true) {
     if(!saved && !allowFresh){storageBlocked=true;storageOK=false;return false;}
-    if(saved && valid(*saved))data=*saved;
+    if(saved && valid(*saved)) {
+      data=*saved;
+      for(int i=0;i<CAPACITY;++i)capturedDurably[i]=data.slots[i].state>=Captured;
+    }
     for(int i=0;i<CAPACITY;++i) {
       if(data.slots[i].state==Reserved)data.slots[i]=Slot{};
       due[i]=now; // reboot prioritises unfinished returns, not another hold
@@ -108,13 +115,13 @@ class Receiver {
     int index=-1;
     for(int i=0;i<CAPACITY;i++)if(same(data.slots[i],owner,tx,fish))index=i;
     if(index<0)for(const auto& t:data.recent)if(t.tx==tx && t.fish==fish && !memcmp(t.owner,owner,32)) {
-      reply(owner,"RETURN",tx,fish);return true;
+      reply(owner,"RETURN",tx,fish,true);return true;
     }
     if(!strcmp(fields[1],"REQ")) {
       if(n<5)return true;
       uint32_t stage=0;if(!parseUnsigned(fields[4],3,stage))return true;
       if(index>=0) {
-        reply(owner,data.slots[index].state>=Delivered || data.slots[index].attempts ? "RETURN":"ACK",tx,fish);
+        reply(owner,data.slots[index].state>=Delivered || data.slots[index].attempts ? "RETURN":"ACK",tx,fish,capturedDurably[index]);
         return true;
       }
       index=reusable();
@@ -124,7 +131,7 @@ class Receiver {
         auto& t=data.recent[data.cursor++];data.cursor%=8;
         memcpy(t.owner,s.owner,32);t.tx=s.tx;t.fish=s.fish;
       }
-      s=Slot{};memcpy(s.owner,owner,32);s.tx=tx;s.fish=fish;s.stage=stage;
+      s=Slot{};capturedDurably[index]=false;memcpy(s.owner,owner,32);s.tx=tx;s.fish=fish;s.stage=stage;
       s.state=Reserved;s.body=s.scales=s.eyes=6;s.tint=0xffff;s.mode='M';
       if(n>=6)strncpy(s.name,fields[5],sizeof(s.name)-1);
       due[index]=now+RESERVE_MS;memset(ack[index],0,sizeof(ack[index]));
@@ -133,7 +140,7 @@ class Receiver {
     if(index<0)return true; // unsolicited/late COMMIT cannot create a fish
     auto& s=data.slots[index];
     if(!strcmp(fields[1],"COMMIT")) {
-      if(s.state>=Delivered || s.attempts) {reply(owner,"RETURN",tx,fish);return true;}
+      if(s.state>=Delivered || s.attempts) {reply(owner,"RETURN",tx,fish,capturedDurably[index]);return true;}
       if(s.state==Reserved) {
         if(n==9 && (fields[4][0]=='C' || fields[4][0]=='M') && !fields[4][1]) {
           uint32_t values[4]={};bool good=true;
@@ -147,7 +154,7 @@ class Receiver {
     } else if(!strcmp(fields[1],"RECALL")) {
       if(s.state==Reserved) {reply(owner,"RETURN",tx,fish);s=Slot{};}
       else if(s.state==Captured)due[index]=now;
-      else reply(owner,"RETURN",tx,fish);
+      else reply(owner,"RETURN",tx,fish,capturedDurably[index]);
     }
     return true;
   }
@@ -158,7 +165,8 @@ class Receiver {
       if(s.state==Reserved && reached(now,due[i])){s=Slot{};continue;}
       if(s.state!=Captured || !reached(now,due[i]))continue;
       if(s.attempts>=4) {s.state=Unresolved;s.statusId=data.nextId++;persist();continue;}
-      char msg[80];snprintf(msg,sizeof(msg),"LFG1|RETURN|%lu|%lu|C",(unsigned long)s.tx,(unsigned long)s.fish);
+      char msg[80];snprintf(msg,sizeof(msg),"LFG1|RETURN|%lu|%lu|C%s",(unsigned long)s.tx,(unsigned long)s.fish,
+          capturedDurably[i]?"|AQUARIUM1":"");
       uint8_t attempt=s.attempts++;persist(); // attempt budget survives reset
       uint32_t hash=0;if(io.send(s.owner,msg,hash))ack[i][attempt]=hash;
       due[i]=now+RETRY_MS;
