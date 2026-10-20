@@ -77,8 +77,12 @@ empty slot is used and saved. Existing names, keys, Public and RF settings stay
 unchanged; the firmware does not send a join message.
 
 Hashtag keys are case-sensitive: use the exact lowercase spelling above on other
-radios. If all slots are occupied, free one in your MeshCore management app and
-restart. A channel already named exactly `#loragotchi-dx` but using a different key
+radios. If all slots are occupied, the firmware leaves every channel untouched
+and displays a **No free channel slot** warning for `#loragotchi-dx`.
+It never clears a slot automatically. On RX, the warning stays visible alongside queue,
+pairing and storage status (including Wireless Paper). If you choose to free a slot in your MeshCore
+management app, restart afterward to retry joining. A channel already named
+exactly `#loragotchi-dx` but using a different key
 is preserved instead of overwritten; export it before correcting or removing it
 in the app, then restart. Removing the automatic channel makes it return at the
 next startup if space is available. A failed storage write may require another
@@ -121,6 +125,7 @@ g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -I . \
 g++ -std=c++17 -I . test/rx/check_journal.cpp -o .local-dev/check_journal
 .local-dev/check_journal
 python3 test/rx/check_targets.py
+python3 test/rx/check_channel_notice.py
 python3 test/rx/check_paper.py
 python3 test/rx/check_aquarium.py ../loragotchi-community-tank
 pio test -e native -e native_kiss_modem

@@ -1,6 +1,7 @@
 #include "MyMesh.h"
 #if defined(LORAFISH_UI) || defined(LORAGOTCHI_RX)
 #include "LoRagotchiChannel.h"
+LoRagotchiChannel::Result LoRagotchiChannel::startupResult = LoRagotchiChannel::Result::AlreadyJoined;
 #endif
 #include "LoRagotchiRXBridge.h"
 #ifdef ESP32
@@ -1222,6 +1223,7 @@ void MyMesh::begin() {
   _store->loadChannels(this);
 #if defined(LORAFISH_UI) || defined(LORAGOTCHI_RX)
   const auto channelResult = LoRagotchiChannel::ensureJoined(*this);
+  LoRagotchiChannel::startupResult = channelResult;
   if (channelResult == LoRagotchiChannel::Result::Added) saveChannels();
   MESH_DEBUG_PRINTLN("LoRagotchi hashtag channel: %u", unsigned(channelResult));
   (void)channelResult;

@@ -4,6 +4,7 @@
 #include "UITask.h"
 ColorVal UIColor::window_bkg=1, UIColor::primary_txt=0;
 MyMesh the_mesh;
+LoRagotchiChannel::Result LoRagotchiChannel::startupResult = LoRagotchiChannel::Result::AlreadyJoined;
 struct Backend : lrx::IO {
   bool saving = true;
   std::vector<std::string> sent;
@@ -20,20 +21,22 @@ struct Panel : DisplayDriver {
   bool on=true;
   int x=0,y=0;
   std::vector<std::string> lines;
+  std::vector<int> ys;
   std::function<void()> duringRefresh;
-  Panel():DisplayDriver(250,122) {}
+  Panel(int w=250,int h=122):DisplayDriver(w,h) {}
   bool isOn() override {return on;}
-  bool isEink() override {return true;}
+  bool isEink() override {return width()==250;}
   void turnOn() override {on=true;}
   void turnOff() override {on=false;}
   void clear() override {}
-  void startFrame(ColorVal=0) override {++frames;lines.clear();}
+  void startFrame(ColorVal=0) override {++frames;lines.clear();ys.clear();}
   void setTextSize(int n) override {assert(n==1);}
   void setColor(ColorVal) override {}
   void setCursor(int a,int b) override {x=a;y=b;}
   void print(const char* text) override {
     assert(x>=0 && x+getTextWidth(text)<=width()); assert(y>=0 && y+8<=height());
-    lines.emplace_back(text);
+    for(auto old : ys) assert(y+8<=old || y>=old+8);
+    ys.push_back(y); lines.emplace_back(text);
   }
   void fillRect(int,int,int,int) override {}
   void drawRect(int,int,int,int) override {}
@@ -82,8 +85,10 @@ int main() {
     auto s=lrx::displayStatus(r);assert(!s.healthy && s.lastId==0);++checks;
   }
   { // Actual UI entrypoint only queues: panel BUSY cannot enter the radio path.
+    LoRagotchiChannel::startupResult=LoRagotchiChannel::Result::Full;
     receiver.begin(nullptr,0);Panel d;UITask ui(nullptr,nullptr);mockNow=0;ui.begin(&d,nullptr,nullptr);
     ui.loop();assert(d.frames==0);runTaskStep();assert(d.frames==1);
+    assert(d.has("#loragotchi-dx: join failed") && d.has("No free channel slot"));
     uint8_t key[32]={3};mockNow=20000;
     receiver.receive(key,"LFG1|REQ|3|101|2|Fish",mockNow);
     receiver.receive(key,"LFG1|COMMIT|3|101",mockNow);ui.loop();
@@ -98,6 +103,8 @@ int main() {
 #else
     assert(d.has("USB companion 115200"));
 #endif
+    assert(d.has("No free channel slot"));
+    LoRagotchiChannel::startupResult=LoRagotchiChannel::Result::AlreadyJoined;
     ++checks;
   }
   { // Allocation failure never creates a synchronous fallback in loop().
@@ -112,6 +119,25 @@ int main() {
   { // Missing display is harmless; no task or radio state changes.
     auto before=overwrites;UITask ui(nullptr,nullptr);ui.begin(nullptr,nullptr,nullptr);ui.loop();
     assert(overwrites==before);++checks;
+  }
+  { // Warning is part of the value-only snapshot, change-driven and coalesced.
+    for (bool paper : {false,true}) {
+      Panel d(paper?250:128,paper?122:64);lrx::StatusScreen screen;lrx::DisplayStatus s{};
+      s.healthy=true;s.bluetooth=true;s.pin=999999;s.lastId=1;s.lastFish=0xffffffff;
+      s.uploads=s.returns=s.failed=4;
+      assert(screen.update(d,s,0));s.channelFull=true;s.uploads=s.returns=s.failed=255;
+      const uint32_t interval=paper?15000:1000;
+      assert(!screen.update(d,s,interval-1));assert(screen.update(d,s,interval));
+      assert(d.has("#loragotchi-dx") && d.has("No free channel slot"));
+      assert(d.has("999999") && d.has("Ready for visitors"));
+      if(paper)assert(d.has("FFFFFFFF"));
+      for(uint32_t t=interval+100;t<86400000;t+=100)assert(!screen.update(d,s,t));
+      s.healthy=false;assert(screen.update(d,s,86400000));
+      assert(d.has("No free channel slot") && d.has("STORAGE NOT READY"));
+      s.channelFull=false;s.uploads=s.returns=s.failed=4;assert(screen.update(d,s,86400000+interval));
+      assert(!d.has("No free channel slot"));
+    }
+    ++checks;
   }
   std::cout<<checks<<" production paper UI scenarios passed ("
 #ifdef BLE_PIN_CODE

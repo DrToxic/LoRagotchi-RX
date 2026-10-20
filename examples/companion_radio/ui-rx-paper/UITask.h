@@ -2,6 +2,7 @@
 #include "../AbstractUITask.h"
 #include "../LoRagotchiRXBridge.h"
 #include "StatusScreen.h"
+#include "../LoRagotchiChannelStatus.h"
 #ifdef LORAGOTCHI_RX_EINK_TASK
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
@@ -55,6 +56,7 @@ public:
     lastSample = now;
     lrx::DisplayStatus value{};
     loragotchiRXStatus(value);
+    value.channelFull = LoRagotchiChannel::startupResult == LoRagotchiChannel::Result::Full;
 #ifdef BLE_PIN_CODE
     value.bluetooth = true;
     value.pin = the_mesh.getBLEPin();

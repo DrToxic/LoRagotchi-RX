@@ -9,12 +9,12 @@ struct DisplayStatus {
   uint8_t uploads = 0, returns = 0, failed = 0;
   bool healthy = false;
   uint32_t lastId = 0, lastFish = 0, pin = 0;
-  bool bluetooth = false;
+  bool bluetooth = false, channelFull = false;
 
   bool operator==(const DisplayStatus& b) const {
     return uploads == b.uploads && returns == b.returns && failed == b.failed &&
       healthy == b.healthy && lastId == b.lastId && lastFish == b.lastFish &&
-      pin == b.pin && bluetooth == b.bluetooth;
+      pin == b.pin && bluetooth == b.bluetooth && channelFull == b.channelFull;
   }
 };
 
@@ -42,16 +42,29 @@ public:
     display.setTextSize(1);
     display.setColor(UIColor::primary_txt);
     const int mid = display.width() / 2;
-    display.drawTextCentered(mid, paper ? 8 : 2, "LoRagotchi-RX");
+    const bool full = value.channelFull;
+    display.drawTextCentered(mid, paper ? (full ? 4 : 8) : 2,
+                             full && !paper ? "#loragotchi-dx" : "LoRagotchi-RX");
     char line[40];
-    snprintf(line, sizeof(line), "Copies queued: %u", unsigned(value.uploads));
-    display.drawTextCentered(mid, paper ? 30 : 17, line);
-    snprintf(line, sizeof(line), "Return jobs: %u / %u",
-             unsigned(value.returns), unsigned(value.failed));
-    display.drawTextCentered(mid, paper ? 50 : 29, line);
+    if (full) {
+      display.drawTextCentered(mid, paper ? 20 : 12,
+                               paper ? "#loragotchi-dx: join failed" : "Could not join");
+      display.drawTextCentered(mid, paper ? 34 : 22, "No free channel slot");
+    }
+    if (full && !paper) {
+      snprintf(line, sizeof(line), "Q:%u R:%u Fail:%u",
+               unsigned(value.uploads), unsigned(value.returns), unsigned(value.failed));
+      display.drawTextCentered(mid, 32, line);
+    } else {
+      snprintf(line, sizeof(line), "Copies queued: %u", unsigned(value.uploads));
+      display.drawTextCentered(mid, paper ? (full ? 48 : 30) : 17, line);
+      snprintf(line, sizeof(line), "Return jobs: %u / %u",
+               unsigned(value.returns), unsigned(value.failed));
+      display.drawTextCentered(mid, paper ? (full ? 62 : 50) : 29, line);
+    }
     if (value.bluetooth) snprintf(line, sizeof(line), "BLE PIN: %06lu", (unsigned long)value.pin);
     else snprintf(line, sizeof(line), "USB companion 115200");
-    display.drawTextCentered(mid, paper ? 70 : 41, line);
+    display.drawTextCentered(mid, paper ? (full ? 76 : 70) : (full ? 42 : 41), line);
     if (paper) {
       if (value.lastId) snprintf(line, sizeof(line), "><> Last fish: %08lX", (unsigned long)value.lastFish);
       else snprintf(line, sizeof(line), "No fish received yet");

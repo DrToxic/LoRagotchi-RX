@@ -15,6 +15,7 @@ with tempfile.TemporaryDirectory(prefix='lrx-paper-') as directory:
         needle = f'#include "{include}"'
         assert source.count(needle) == 1
         source = source.replace(needle, '#include "paper_mocks.h"')
+    source = source.replace('../LoRagotchiChannelStatus.h', 'examples/companion_radio/LoRagotchiChannelStatus.h')
     (out/'UITask.h').write_text(source)
     (out/'freertos').mkdir()
     for header in ('FreeRTOS.h', 'queue.h', 'task.h'):

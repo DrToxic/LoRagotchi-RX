@@ -57,6 +57,7 @@ struct BaseChatMesh {
 ) + r'''
 #include "examples/companion_radio/LoRagotchiChannel.h"
 using Result = LoRagotchiChannel::Result;
+Result LoRagotchiChannel::startupResult = Result::AlreadyJoined;
 ChannelDetails named(const char* name, uint8_t secret) {
   ChannelDetails c{};
   strncpy(c.name, name, sizeof(c.name));
@@ -116,6 +117,7 @@ int main() {
   return 0;
 #else
   assert(blank.writes == 1 && same(first.channels[0], named("Public", 0x42)));
+  assert(LoRagotchiChannel::startupResult == Result::Added);
   assert(same(first.channels[1], channel));
   const uint8_t zeros[16] = {};
   assert(!memcmp(first.channels[1].channel.secret + 16, zeros, 16));
@@ -124,6 +126,7 @@ int main() {
   puts("PASS fresh boot joins standard 128-bit hashtag key; Public preserved");
   for (int i = 0; i < 5; ++i) {
     MyMesh reboot(blank); reboot.boot();
+    assert(LoRagotchiChannel::startupResult == Result::AlreadyJoined);
     assert(same(reboot.channels[1], channel));
   }
   assert(blank.writes == 1);
@@ -148,10 +151,19 @@ int main() {
   Store full; full.exists = true;
   for (int i = 0; i < 8; ++i) full.disk[i] = named("Occupied", uint8_t(i + 1));
   MyMesh noRoom(full); noRoom.boot(); assert(full.writes == 0);
+  assert(LoRagotchiChannel::startupResult == Result::Full);
   assert(LoRagotchiChannel::ensureJoined(noRoom) == Result::Full);
   for (int i = 0; i < 8; ++i) assert(same(noRoom.channels[i], full.disk[i]));
+  Store fullConflict = full; fullConflict.disk[2] = named(LoRagotchiChannel::NAME, 7);
+  MyMesh conflictingFull(fullConflict); conflictingFull.boot();
+  assert(LoRagotchiChannel::startupResult == Result::Full && fullConflict.writes == 0);
+  for (int i=0; i<8; ++i) assert(same(conflictingFull.channels[i], fullConflict.disk[i]));
+  Store fullJoined = full; fullJoined.disk[7] = target("Existing alias");
+  MyMesh joinedFull(fullJoined); joinedFull.boot();
+  assert(LoRagotchiChannel::startupResult == Result::AlreadyJoined && fullJoined.writes == 0);
   full.disk[3] = {}; MyMesh freed(full); freed.boot();
   assert(full.writes == 1 && same(freed.channels[3], channel));
+  assert(LoRagotchiChannel::startupResult == Result::Added);
   puts("PASS full table unchanged; freeing a slot enables join on next boot");
 
   Store occupied; occupied.exists = true;

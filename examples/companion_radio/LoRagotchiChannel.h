@@ -1,13 +1,13 @@
 #pragma once
 
 #include <Utils.h>
+#include "LoRagotchiChannelStatus.h"
 #include <cstring>
 
 // Companion-local policy; the shared MeshCore channel/storage APIs stay unchanged.
 namespace LoRagotchiChannel {
 
 static constexpr char NAME[] = "#loragotchi-dx";
-enum class Result { AlreadyJoined, Added, Full, NameConflict, SetFailed };
 
 template <typename Mesh>
 Result ensureJoined(Mesh& host) {
@@ -37,8 +37,8 @@ Result ensureJoined(Mesh& host) {
     }
   }
   // Never overwrite a same-named private channel or an occupied slot.
-  if (nameConflict) return Result::NameConflict;
   if (vacant < 0) return Result::Full;
+  if (nameConflict) return Result::NameConflict;
   // addChannel() tracks defaults, not slots restored by loadChannels().
   // Using it here could overwrite a saved channel. Use the actual vacant index.
   if (!host.setChannel(vacant, wanted)) return Result::SetFailed;
