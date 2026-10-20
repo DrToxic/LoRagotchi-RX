@@ -7,10 +7,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
+#include "LoRaFishTiming.h"
 
 namespace lrx {
 static constexpr uint8_t COMMAND = 0x70, VERSION = 1, CAPACITY = 4;
-static constexpr uint32_t HOLD_MS = 4000, RESERVE_MS = 30000, RETRY_MS = 10000;
+static constexpr uint32_t HOLD_MS = 4000, RESERVE_MS = LoRaFishTiming::reserveMs, RETRY_MS = 10000;
 enum State : uint8_t { Empty, Reserved, Captured, Delivered, Unresolved };
 #pragma pack(push, 1)
 struct Slot {
@@ -57,9 +58,25 @@ class Receiver {
   uint32_t due[CAPACITY]={}, ack[CAPACITY][4]={};
   bool ackKnown[CAPACITY][4]={};
   bool capturedDurably[CAPACITY]={};
+  // Cancelled reservations are RAM-only and MUST NOT claim AQUARIUM capture.
+  Tombstone expired[CAPACITY]={};
+  uint32_t expiredUntil[CAPACITY]={};
+  bool expiredKnown[CAPACITY]={};
+  uint8_t expiredCursor=0;
   uint32_t lease=0, leaseUntil=0, saveRetry=0;
   bool storageOK=true, storageBlocked=false;
   static bool reached(uint32_t now,uint32_t at) {return int32_t(now-at)>=0;}
+  void expireReservations(uint32_t now) {
+    for(int i=0;i<CAPACITY;++i) {
+      if(expiredKnown[i] && reached(now,expiredUntil[i]))expiredKnown[i]=false;
+      auto& s=data.slots[i];
+      if(s.state!=Reserved || !reached(now,due[i]))continue;
+      const uint8_t index=expiredCursor++ % CAPACITY;
+      memcpy(expired[index].owner,s.owner,32);expired[index].tx=s.tx;expired[index].fish=s.fish;
+      expiredUntil[index]=now+RESERVE_MS;expiredKnown[index]=true;
+      s=Slot{};
+    }
+  }
   static uint32_t u32(const uint8_t* p) {return uint32_t(p[0])|uint32_t(p[1])<<8|uint32_t(p[2])<<16|uint32_t(p[3])<<24;}
   static void put32(uint8_t* p,uint32_t v) {for(int i=0;i<4;i++)p[i]=v>>(8*i);}
   bool persist() {
@@ -72,10 +89,10 @@ class Receiver {
   bool same(const Slot& s,const uint8_t* owner,uint32_t tx,uint32_t fish) const {
     return s.state && s.tx==tx && s.fish==fish && !memcmp(s.owner,owner,32);
   }
-  void reply(const uint8_t* owner,const char* verb,uint32_t tx,uint32_t fish,bool aquarium=false) {
+  void reply(const uint8_t* owner,const char* verb,uint32_t tx,uint32_t fish,bool aquarium=false,bool cancelled=false) {
     char msg[80]; uint32_t unused=0,timeout=0;
     snprintf(msg,sizeof(msg),"LFG1|%s|%lu|%lu%s",verb,(unsigned long)tx,(unsigned long)fish,
-        !strcmp(verb,"RETURN")?(aquarium?"|C|AQUARIUM1":"|C"):""); io.send(owner,msg,unused,timeout);
+        !strcmp(verb,"RETURN")?(cancelled?"|C|CANCEL1":aquarium?"|C|AQUARIUM1":"|C"):""); io.send(owner,msg,unused,timeout);
   }
   int reusable() const {
     for(int i=0;i<CAPACITY;++i) if(data.slots[i].state==Empty)return i;
@@ -107,6 +124,7 @@ class Receiver {
   bool healthy() const {return storageOK;}
   bool receive(const uint8_t owner[32],const char* text,uint32_t now) {
     if(!text || strncmp(text,"LFG1|",5))return false;
+    expireReservations(now);
     char buf[160]; if(strlen(text)>=sizeof(buf))return true;
     strcpy(buf,text); char* fields[10]={}; size_t n=0; char* context=nullptr;
     for(char* p=strtok_r(buf,"|",&context);p && n<10;p=strtok_r(nullptr,"|",&context))fields[n++]=p;
@@ -115,6 +133,11 @@ class Receiver {
     if(!parseUnsigned(fields[2],UINT32_MAX,tx) || !parseUnsigned(fields[3],UINT32_MAX,fish))return true;
     int index=-1;
     for(int i=0;i<CAPACITY;i++)if(same(data.slots[i],owner,tx,fish))index=i;
+    if(index<0 && (!strcmp(fields[1],"REQ") || !strcmp(fields[1],"COMMIT") || !strcmp(fields[1],"RECALL")))
+      for(int i=0;i<CAPACITY;++i)if(expiredKnown[i] && expired[i].tx==tx &&
+        expired[i].fish==fish && !memcmp(expired[i].owner,owner,32)) {
+      reply(owner,"RETURN",tx,fish,false,true);return true;
+    }
     if(index<0)for(const auto& t:data.recent)if(t.tx==tx && t.fish==fish && !memcmp(t.owner,owner,32)) {
       reply(owner,"RETURN",tx,fish,true);return true;
     }
@@ -154,17 +177,17 @@ class Receiver {
       }
       if(storageOK)reply(owner,"ARRIVED",tx,fish);
     } else if(!strcmp(fields[1],"RECALL")) {
-      if(s.state==Reserved) {reply(owner,"RETURN",tx,fish);s=Slot{};}
+      if(s.state==Reserved) {due[index]=now;expireReservations(now);reply(owner,"RETURN",tx,fish,false,true);}
       else if(s.state==Captured)due[index]=now;
       else reply(owner,"RETURN",tx,fish,capturedDurably[index]);
     }
     return true;
   }
   void tick(uint32_t now) {
+    expireReservations(now);
     if(!storageBlocked && !storageOK && reached(now,saveRetry)){persist();saveRetry=now+5000;}
     for(int i=0;i<CAPACITY;i++) {
       auto& s=data.slots[i];
-      if(s.state==Reserved && reached(now,due[i])){s=Slot{};continue;}
       if(s.state!=Captured || !reached(now,due[i]))continue;
       if(s.attempts>=4) {s.state=Unresolved;s.statusId=data.nextId++;persist();continue;}
       char msg[80];snprintf(msg,sizeof(msg),"LFG1|RETURN|%lu|%lu|C%s",(unsigned long)s.tx,(unsigned long)s.fish,

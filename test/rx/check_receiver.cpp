@@ -92,9 +92,9 @@ int main(int argc,char** argv){
     PASS("failed durable ACK retains unacknowledged copy for replay");
   }
   {
-    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);r.tick(30000);
-    r.receive(owner,"LFG1|COMMIT|7|8",30001);assert(!r.nextEvent());
-    r.receive(owner,"LFG1|REQ|7|8|2|Fish",40000);r.receive(owner,"LFG1|COMMIT|7|8",40001);
+    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);r.tick(lrx::RESERVE_MS);
+    r.receive(owner,"LFG1|COMMIT|7|8",lrx::RESERVE_MS+1);assert(!r.nextEvent());
+    r.receive(owner,"LFG1|REQ|9|8|2|Fish",lrx::RESERVE_MS+2);r.receive(owner,"LFG1|COMMIT|9|8",lrx::RESERVE_MS+3);
     assert(r.data.slots[0].body==6 && !r.data.slots[0].appearance);
     auto copy=io.saved;reinterpret_cast<uint8_t*>(&copy)[45]^=1;assert(!lrx::valid(copy));
     PASS("reservation timeout, missing-colour fallback, corrupt journal detection");
@@ -145,12 +145,12 @@ int main(int argc,char** argv){
   {
     Fake io;lrx::Receiver r(io);r.begin(nullptr,0);
     r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);r.receive(owner,"LFG1|RECALL|7|8",1);
-    assert(io.sent.back()=="LFG1|RETURN|7|8|C");
-    intake(r);io.fail=true;r.tick(4001);
+    assert(io.sent.back()=="LFG1|RETURN|7|8|C|CANCEL1");
+    intake(r,other);io.fail=true;r.tick(4001);
     assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1"); // earlier capture remains durable
     lrx::Receiver reboot(io);reboot.begin(&io.saved,0);reboot.tick(0);
     assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1");
-    PASS("AQUARIUM1 only follows durable capture, survives restart and later save failure; cancellation is unmarked");
+    PASS("AQUARIUM1 only follows durable capture, survives restart and later save failure; cancellation has no capture marker");
   }
   {
     Fake io;lrx::Receiver r(io);r.begin(nullptr,0);intake(r);io.estimate=45000;
@@ -166,6 +166,29 @@ int main(int argc,char** argv){
     failed.hash=UINT32_MAX;failed.sendFailure=true;otherReceiver.tick(4001);
     assert(!otherReceiver.acknowledgeRadio(0));
     PASS("zero is a valid queued ACK hash, not an unused or failed-send entry");
+  }
+
+  {
+    Fake io;lrx::Receiver r(io);r.begin(nullptr,0);auto writes=io.writes;
+    r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);
+    r.receive(owner,"LFG1|REQ|7|8|2|Fish",lrx::RESERVE_MS-1);
+    r.tick(lrx::RESERVE_MS);assert(r.data.slots[0].state==lrx::Empty && io.writes==writes);
+    r.receive(owner,"LFG1|COMMIT|7|8",lrx::RESERVE_MS);
+    assert(io.sent.back()=="LFG1|RETURN|7|8|C|CANCEL1" && !r.nextEvent());
+    r.receive(owner,"LFG1|REQ|7|8|2|Fish",lrx::RESERVE_MS+1);assert(r.data.slots[0].state==lrx::Empty);
+    intake(r,other,lrx::RESERVE_MS+2);assert(r.data.slots[0].state==lrx::Captured);
+    r.tick(2*lrx::RESERVE_MS);assert(r.data.slots[0].state==lrx::Captured);
+    PASS("lease boundary/duplicate expiry, no reservation flash writes, cancellation tombstone, unrelated captured fish preserved");
+  }
+  {
+    Fake io;lrx::Receiver r(io);const uint32_t start=UINT32_MAX-1000;r.begin(nullptr,start);
+    r.receive(owner,"LFG1|REQ|7|8|2|Fish",start);r.tick(start+lrx::RESERVE_MS-1);
+    assert(r.data.slots[0].state==lrx::Reserved);
+    r.receive(owner,"LFG1|COMMIT|7|8",start+lrx::RESERVE_MS);
+    assert(r.data.slots[0].state==lrx::Empty && io.sent.back()=="LFG1|RETURN|7|8|C|CANCEL1");
+    r.receive(owner,"LFG1|REQ|7|8|2|Fish",start+2*lrx::RESERVE_MS);
+    assert(r.data.slots[0].state==lrx::Reserved);
+    PASS("reservation expires at ingress without tick across clock wrap; cancellation tombstone lifetime bounded");
   }
   std::cout<<cases<<" production-core scenarios passed\n";
 }
