@@ -3,6 +3,9 @@
 #include "LoRagotchiRX.h"
 #include "LoRagotchiRXJournal.h"
 #include "LoRagotchiRXBridge.h"
+#ifdef LORAGOTCHI_RX_EINK_TASK
+#include "ui-rx-paper/ReceiverStatus.h"
+#endif
 #if !defined(ESP32) && !defined(NRF52_PLATFORM)
 #error "RX persistence supports ESP32 SPIFFS and nRF52 LittleFS targets"
 #endif
@@ -67,6 +70,11 @@ void loragotchiRXStatus(uint8_t& uploads, uint8_t& returns, uint8_t& failed, boo
     if (slot.state == lrx::Unresolved) ++failed;
   }
 }
+#ifdef LORAGOTCHI_RX_EINK_TASK
+void loragotchiRXStatus(lrx::DisplayStatus& status) {
+  status = lrx::displayStatus(receiver);
+}
+#endif
 void loragotchiRXTick() { receiver.tick(millis()); }
 bool loragotchiRXReceive(const uint8_t* owner, const char* text) {
   return receiver.receive(owner, text, millis());

@@ -23,6 +23,7 @@ jobs:
           g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -I . test/rx/check_journal.cpp -o .local-dev/check_journal
           .local-dev/check_journal
           python3 test/rx/check_targets.py
+          python3 test/rx/check_paper.py
       - uses: actions/checkout@v4
         with:
           repository: DrToxic/LoRagotchi-Aquarium
@@ -64,6 +65,10 @@ jobs:
           - environment: Tbeam_SX1276_LoRagotchi_RX_usb
             target: build
           - environment: Tbeam_SX1276_LoRagotchi_RX_ble
+            target: build
+          - environment: Heltec_Wireless_Paper_LoRagotchi_RX_usb
+            target: build
+          - environment: Heltec_Wireless_Paper_LoRagotchi_RX_ble
             target: build
     steps:
       - uses: actions/checkout@v4
