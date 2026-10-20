@@ -1,6 +1,12 @@
 #include <Arduino.h>   // needed for PlatformIO
 #include <Mesh.h>
 #include "MyMesh.h"
+
+#if defined(BLE_PIN_CODE) && (defined(LORAFISH_UI) || defined(LORAGOTCHI_RX))
+#include "LoRagotchiBLEPin.h"
+// Board targets define this radio; their identity generators use it as well.
+extern RADIO_CLASS radio;
+#endif
 #include "LoRagotchiRXBridge.h"
 
 // Believe it or not, this std C function is busted on some platforms!
@@ -226,25 +232,29 @@ void setup() {
   TDECK_BOOT_TRACE("fish load end");
 #endif
 
-#ifdef BLE_PIN_CODE // 123456 by default
+#ifdef BLE_PIN_CODE
+#if defined(LORAFISH_UI) || defined(LORAGOTCHI_RX)
+  // Same hardware-noise source used for identity generation, not the shared
+  // Arduino PRNG. A missing/failed display must never restore the default PIN.
+  RadioNoiseListener pin_rng(radio);
+  the_mesh.setBLEPin(LoRagotchiBLE::selectPin(
+      the_mesh.getNodePrefs()->ble_pin, BLE_PIN_CODE, pin_rng));
+#else
   if (the_mesh.getNodePrefs()->ble_pin == 0) {
 #ifdef DISPLAY_CLASS
-#ifdef LORAFISH_UI
-    the_mesh.setBLEPin(BLE_PIN_CODE);
-#else
     if (disp != NULL && BLE_PIN_CODE == 123456) {
       StdRNG rng;
       the_mesh.setBLEPin(rng.nextInt(100000, 999999)); // random pin each session
     } else {
       the_mesh.setBLEPin(BLE_PIN_CODE); // otherwise static pin
     }
-  #endif
 #else
     the_mesh.setBLEPin(BLE_PIN_CODE); // otherwise static pin
 #endif
   } else {
     the_mesh.setBLEPin(the_mesh.getNodePrefs()->ble_pin);
   }
+#endif
 #else
   the_mesh.setBLEPin(0);
 #endif

@@ -51,6 +51,25 @@ These profiles preserve their original DX board pins, RF defaults and layouts.
 Inherited DX/MeshCore environments are not RX products. Build support is not a
 claim of physical validation on every board; see the artifact manifest.
 
+## BLE pairing PIN
+
+With the default build settings and no saved PIN, LoRagotchi selects a random
+six-digit PIN once per boot from the same radio-noise RNG used for device
+identities. Use the active PIN shown on the device, not the old shared `123456`.
+The automatic PIN is not written to saved preferences. A display initialization
+failure does not switch back to a shared PIN; restore the display before pairing.
+
+An existing **nonzero saved PIN always wins**, including a deliberately saved
+`123456`. Otherwise, a non-default `BLE_PIN_CODE` build setting is honored.
+The inherited build value `123456` means automatic selection, not a fixed PIN.
+To return to automatic mode, clear the saved PIN to `0` using your MeshCore
+management tool, keep the default build setting, and restart. Choosing a fixed
+PIN is optional. Existing BLE bonds are not deleted or reset by this change;
+a bonded phone may reconnect without asking for a PIN again. USB-only builds
+are unchanged.
+
+The active BLE PIN appears on the RX status screen, including Wireless Paper.
+
 ## Wireless Paper status display
 
 The Wireless Paper profiles reuse the existing E213 panel auto-detection for the
@@ -118,6 +137,7 @@ the aquarium application. Only one active aquarium consumer is supported.
 
 ```sh
 mkdir -p .local-dev
+python3 test/ble/check_pairing_pin.py
 python3 test/channels/check_autojoin.py # g++ and OpenSSL development headers
 g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -I . \
   test/rx/check_receiver.cpp -o .local-dev/check_receiver
