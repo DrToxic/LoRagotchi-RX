@@ -68,6 +68,23 @@ without a synchronously blocking display fallback. No animation or countdown.
 The other boards retain their existing UI. Physical refresh quality, ghosting,
 USB/BLE pairing and concurrent RF operation still need device validation.
 
+## Automatic community channel
+
+At startup, LoRagotchi automatically joins **`#loragotchi-dx`** using the standard
+MeshCore hashtag key. Saved channels load first. If already joined (including an
+alias with the same key), no slot or flash write is added. Otherwise the first
+empty slot is used and saved. Existing names, keys, Public and RF settings stay
+unchanged; the firmware does not send a join message.
+
+Hashtag keys are case-sensitive: use the exact lowercase spelling above on other
+radios. If all slots are occupied, free one in your MeshCore management app and
+restart. A channel already named exactly `#loragotchi-dx` but using a different key
+is preserved instead of overwritten; export it before correcting or removing it
+in the app, then restart. Removing the automatic channel makes it return at the
+next startup if space is available. A failed storage write may require another
+startup to persist it. Ordinary channel chat is separate from fish transfers.
+
+
 ## Build and connect
 
 ```sh
@@ -97,6 +114,7 @@ the aquarium application. Only one active aquarium consumer is supported.
 
 ```sh
 mkdir -p .local-dev
+python3 test/channels/check_autojoin.py # g++ and OpenSSL development headers
 g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -I . \
   test/rx/check_receiver.cpp -o .local-dev/check_receiver
 .local-dev/check_receiver

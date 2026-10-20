@@ -1,4 +1,7 @@
 #include "MyMesh.h"
+#if defined(LORAFISH_UI) || defined(LORAGOTCHI_RX)
+#include "LoRagotchiChannel.h"
+#endif
 #include "LoRagotchiRXBridge.h"
 #ifdef ESP32
 #include <Preferences.h>
@@ -1217,6 +1220,12 @@ void MyMesh::begin() {
   bootstrapRTCfromContacts();
   addChannel("Public", PUBLIC_GROUP_PSK); // pre-configure public channel
   _store->loadChannels(this);
+#if defined(LORAFISH_UI) || defined(LORAGOTCHI_RX)
+  const auto channelResult = LoRagotchiChannel::ensureJoined(*this);
+  if (channelResult == LoRagotchiChannel::Result::Added) saveChannels();
+  MESH_DEBUG_PRINTLN("LoRagotchi hashtag channel: %u", unsigned(channelResult));
+  (void)channelResult;
+#endif
 
   radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
   radio_driver.setTxPower(_prefs.tx_power_dbm);
