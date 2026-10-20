@@ -36,6 +36,7 @@ standalone devices are excluded. USB is serial at 115200 baud; BLE is Nordic UAR
 | Board | Environment prefix (append `_usb` or `_ble`) | Image |
 | --- | --- | --- |
 | Heltec V3 | `Heltec_v3_LoRagotchi_RX` | ESP32-S3 application BIN |
+| Heltec Wireless Paper V1.1 / V1.1.1 / V1.2 | `Heltec_Wireless_Paper_LoRagotchi_RX` | ESP32-S3 application BIN |
 | Heltec V4 OLED | `heltec_v4_LoRagotchi_RX` | ESP32-S3 application BIN |
 | ThinkNode M2 | `ThinkNode_M2_LoRagotchi_RX` | ESP32-S3 application BIN |
 | Heltec T096 | `Heltec_t096_LoRagotchi_RX` | nRF52840 UF2 |
@@ -49,6 +50,44 @@ carry this connection over **WLAN/LAN**; RX does **not** yet provide onboard Wi-
 These profiles preserve their original DX board pins, RF defaults and layouts.
 Inherited DX/MeshCore environments are not RX products. Build support is not a
 claim of physical validation on every board; see the artifact manifest.
+
+## Wireless Paper status display
+
+The Wireless Paper profiles reuse the existing E213 panel auto-detection for the
+V1.1 and V1.1.1/V1.2 family. Original V1.0 panels are not covered by these images.
+The screen is a static connector dashboard, not an animated aquarium: queued
+copies, pending/failed returns, connection method/PIN, storage health and the last
+received fish ID. The last-fish line remains after return and PC upload, including
+a restart while the journal is retained. It is not a claim that the PC has saved it.
+
+Only changed display state causes a redraw, at most once every 15 seconds during
+bursts. Idle screens are untouched. Updates run in a separate, single-owner
+display task with a one-snapshot mailbox; slow panel BUSY waits do not run inside
+the mesh loop. If the display task cannot be allocated, reception continues
+without a synchronously blocking display fallback. No animation or countdown.
+The other boards retain their existing UI. Physical refresh quality, ghosting,
+USB/BLE pairing and concurrent RF operation still need device validation.
+
+## Automatic community channel
+
+At startup, LoRagotchi automatically joins **`#loragotchi-dx`** using the standard
+MeshCore hashtag key. Saved channels load first. If already joined (including an
+alias with the same key), no slot or flash write is added. Otherwise the first
+empty slot is used and saved. Existing names, keys, Public and RF settings stay
+unchanged; the firmware does not send a join message.
+
+Hashtag keys are case-sensitive: use the exact lowercase spelling above on other
+radios. If all slots are occupied, the firmware leaves every channel untouched
+and displays a **No free channel slot** warning for `#loragotchi-dx`.
+It never clears a slot automatically. On RX, the warning stays visible alongside queue,
+pairing and storage status (including Wireless Paper). If you choose to free a slot in your MeshCore
+management app, restart afterward to retry joining. A channel already named
+exactly `#loragotchi-dx` but using a different key
+is preserved instead of overwritten; export it before correcting or removing it
+in the app, then restart. Removing the automatic channel makes it return at the
+next startup if space is available. A failed storage write may require another
+startup to persist it. Ordinary channel chat is separate from fish transfers.
+
 
 ## Build and connect
 
@@ -79,12 +118,15 @@ the aquarium application. Only one active aquarium consumer is supported.
 
 ```sh
 mkdir -p .local-dev
+python3 test/channels/check_autojoin.py # g++ and OpenSSL development headers
 g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -I . \
   test/rx/check_receiver.cpp -o .local-dev/check_receiver
 .local-dev/check_receiver
 g++ -std=c++17 -I . test/rx/check_journal.cpp -o .local-dev/check_journal
 .local-dev/check_journal
 python3 test/rx/check_targets.py
+python3 test/rx/check_channel_notice.py
+python3 test/rx/check_paper.py
 python3 test/rx/check_aquarium.py ../loragotchi-community-tank
 pio test -e native -e native_kiss_modem
 ```

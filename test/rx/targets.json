@@ -110,5 +110,21 @@
     "format": "bin",
     "source_environment": "Tbeam_SX1276_LoRaFish_companion_ble",
     "upstream_experimental": true
+  },
+  {
+    "environment": "Heltec_Wireless_Paper_LoRagotchi_RX_usb",
+    "board": "Heltec_Wireless_Paper",
+    "transport": "usb",
+    "format": "bin",
+    "source_environment": "Heltec_Wireless_Paper_companion_radio_usb",
+    "upstream_experimental": false
+  },
+  {
+    "environment": "Heltec_Wireless_Paper_LoRagotchi_RX_ble",
+    "board": "Heltec_Wireless_Paper",
+    "transport": "ble",
+    "format": "bin",
+    "source_environment": "Heltec_Wireless_Paper_companion_radio_ble",
+    "upstream_experimental": false
   }
 ]

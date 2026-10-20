@@ -2,8 +2,12 @@
 #ifdef LORAGOTCHI_RX
 #include <stddef.h>
 #include <stdint.h>
+namespace lrx { struct DisplayStatus; }
 void loragotchiRXBegin();
 void loragotchiRXStatus(uint8_t& uploads,uint8_t& returns,uint8_t& failed,bool& healthy);
+#ifdef LORAGOTCHI_RX_EINK_TASK
+void loragotchiRXStatus(lrx::DisplayStatus& status);
+#endif
 void loragotchiRXTick();
 bool loragotchiRXReceive(const uint8_t* owner,const char* text);
 void loragotchiRXAck(uint32_t hash);

@@ -92,3 +92,25 @@ recovered snapshot remains eligible even if a later status write fails. The PC
 need not be connected: this marker claims receiver acceptance, not PC persistence.
 
 The existing LRX/1 PC event schema and version-1 journal layout are unchanged.
+
+## Wireless Paper test addendum
+
+Use `Heltec_Wireless_Paper_LoRagotchi_RX_usb` or `_ble` only for the
+Wireless Paper V1.1/V1.1.1/V1.2 panel family (not V1.0, V3 or Vision Master).
+Existing inherited E213 auto-detection, RF pins and SPIFFS partitioning are used.
+The BLE image deliberately does not inherit the old companion profile's Wi-Fi
+interface; WLAN still uses the authenticated PC/SBC bridge.
+
+- Boot and verify the 250x122 landscape status layout and, for BLE, pairing PIN.
+- Leave idle: no periodic panel refresh or animation should occur.
+- Send a visit; status changes may be delayed/coalesced up to about 15 seconds,
+  plus panel refresh time. The last fish ID remains after its original returns.
+- Send several visits while the panel is visibly refreshing. Check each original
+  still returns and the Aquarium receives each distinct copy. The four-second
+  hold is a radio scheduling deadline, not a promise of exact over-the-air latency.
+- Check short visits, offline queueing/reconnect and storage/failed-return status.
+- Check ghosting after repeated visits. Panel refresh quality, worker stack usage
+  and physical SPI/radio coexistence are not established by host tests.
+
+No new journal writes are made for screen state, and no LFG1/LRX1 formats change.
+There is no on-board swimming fish; the aquarium PC renders the animated copy.
