@@ -18,12 +18,14 @@ jobs:
       - name: Production receiver fault tests
         run: |
           mkdir -p .local-dev
+          python3 test/ble/check_pairing_pin.py
           g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -I . test/rx/check_receiver.cpp -o .local-dev/check_receiver
           .local-dev/check_receiver
           g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -I . test/rx/check_journal.cpp -o .local-dev/check_journal
           .local-dev/check_journal
           python3 test/rx/check_targets.py
           python3 test/rx/check_paper.py
+          python3 test/rx/check_channel_notice.py
       - uses: actions/checkout@v4
         with:
           repository: DrToxic/LoRagotchi-Aquarium

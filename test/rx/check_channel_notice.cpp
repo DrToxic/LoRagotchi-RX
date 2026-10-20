@@ -42,6 +42,7 @@ int main() {
   using Result=LoRagotchiChannel::Result;
   for(auto result:{Result::AlreadyJoined,Result::Added,Result::Full}) {
     LoRagotchiChannel::startupResult=result;
+    the_mesh.pin=987654;
     Panel d;UITask ui(nullptr,nullptr);mockNow=0;ui.begin(&d,nullptr,nullptr);
     storageHealthy=true;ui.loop();
     assert(d.has("Ready for visitors"));
@@ -50,7 +51,7 @@ int main() {
       assert(d.has("Q:255 R:255 Fail:255"));
     } else assert(!d.has("No free channel slot") && d.has("Copies queued: 4"));
 #ifdef BLE_PIN_CODE
-    assert(d.has("BLE PIN: 123456"));
+    assert(d.has("BLE PIN: 987654"));
 #else
     assert(d.has("USB companion 115200"));
 #endif
