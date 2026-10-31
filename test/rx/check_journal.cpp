@@ -13,6 +13,12 @@ struct Files : lrx::JournalFiles {
     if (badReadback && bank==last) journal.magic^=1;
     return true;
   }
+  bool header(unsigned bank,uint32_t& magic,uint32_t& version) override {
+    if(banks[bank].size()<8)return false;memcpy(&magic,banks[bank].data(),4);memcpy(&version,banks[bank].data()+4,4);return true;
+  }
+  bool readV1(unsigned bank,lrx::JournalV1& j) override {
+    if(banks[bank].size()!=sizeof(j))return false;memcpy(&j,banks[bank].data(),sizeof(j));return true;
+  }
   bool write(unsigned bank,const lrx::Journal& journal) override {
     last=bank;
     if (badWrite) return false;
@@ -22,7 +28,7 @@ struct Files : lrx::JournalFiles {
   }
 };
 lrx::Journal make(uint32_t generation) {
-  lrx::Journal journal{};journal.magic=0x3158524cUL;journal.version=1;
+  lrx::Journal journal{};journal.magic=0x3158524cUL;journal.version=2;
   journal.nextId=generation+1;journal.generation=generation;
   journal.checksum=lrx::checksum(journal);return journal;
 }
@@ -51,4 +57,15 @@ int main() {
   std::cout<<"PASS bank generations compare across uint32 rollover\n";
   wrapped.checksum^=1;assert(!wrap.save(wrapped));
   std::cout<<"PASS invalid journal is rejected before writing\n";
+  files=Files{};lrx::JournalV1 legacy{};legacy.magic=0x3158524c;legacy.version=1;legacy.generation=9;legacy.nextId=12;
+  legacy.slots[0].fish=123;legacy.slots[0].id=11;legacy.slots[0].state=lrx::Captured;legacy.slots[0].owner[31]=44;
+  uint32_t hash=2166136261UL;auto p=reinterpret_cast<uint8_t*>(&legacy);
+  for(size_t i=0;i<offsetof(lrx::JournalV1,checksum);++i)hash=(hash^p[i])*16777619UL;
+  legacy.checksum=hash;files.banks[0].assign(p,p+sizeof(legacy));lrx::JournalStore migration(files);
+  assert(migration.load(loaded,fresh) && loaded.version==2 && loaded.slots[0].fish==123 && loaded.slots[0].owner[31]==44 && !loaded.slots[0].presence);
+  ++loaded.generation;loaded.checksum=lrx::checksum(loaded);assert(migration.save(loaded) && files.last==1);
+  assert(files.banks[0].size()==sizeof(legacy));
+  uint32_t future=3;memcpy(files.banks[0].data()+4,&future,4);lrx::JournalStore futureStore(files);
+  assert(!futureStore.load(loaded,fresh) && !fresh);
+  std::cout<<"PASS v1 migration preserves old bank; future bank blocks downgrade\n";
 }

@@ -14,26 +14,43 @@ static constexpr uint8_t COMMAND = 0x70, VERSION = 1, CAPACITY = 4;
 static constexpr uint32_t HOLD_MS = 4000, RESERVE_MS = LoRaFishTiming::reserveMs, RETRY_MS = 10000;
 enum State : uint8_t { Empty, Reserved, Captured, Delivered, Unresolved };
 #pragma pack(push, 1)
-struct Slot {
+struct SlotV1 {
   uint8_t owner[32]; uint32_t tx, fish, id, statusId;
   uint8_t state, stage, mode, body, scales, eyes, appearance;
   uint16_t tint; char name[24];
   uint8_t attempts, uploaded, statusUploaded;
 };
+struct Slot {
+  uint8_t owner[32]; uint32_t tx, fish, id, statusId;
+  uint8_t state, stage, mode, body, scales, eyes, appearance;
+  uint16_t tint; char name[24];
+  uint8_t attempts, uploaded, statusUploaded;
+  uint8_t presence; uint16_t species; uint8_t genes[3], panel;
+};
 struct Tombstone { uint8_t owner[32]; uint32_t tx, fish; };
+struct JournalV1 {
+  uint32_t magic, version, generation, nextId;
+  SlotV1 slots[CAPACITY]; Tombstone recent[8]; uint8_t cursor; uint32_t checksum;
+};
 struct Journal {
   uint32_t magic, version, generation, nextId;
   Slot slots[CAPACITY]; Tombstone recent[8]; uint8_t cursor;
   uint32_t checksum;
 };
 #pragma pack(pop)
+static_assert(offsetof(Slot, presence)==sizeof(SlotV1), "v1 slot prefix must be byte-compatible");
 inline uint32_t checksum(const Journal& j) {
   uint32_t h=2166136261UL; const auto* p=reinterpret_cast<const uint8_t*>(&j);
   for(size_t i=0;i<offsetof(Journal, checksum);++i) h=(h^p[i])*16777619UL;
   return h;
 }
+inline bool validV1(const JournalV1& j) {
+  uint32_t h=2166136261UL; const auto* p=reinterpret_cast<const uint8_t*>(&j);
+  for(size_t i=0;i<offsetof(JournalV1, checksum);++i) h=(h^p[i])*16777619UL;
+  return j.magic==0x3158524cUL && j.version==1 && j.nextId>0 && j.cursor<8 && h==j.checksum;
+}
 inline bool valid(const Journal& j) {
-  return j.magic==0x3158524cUL && j.version==1 && j.nextId>0 && j.cursor<8 && j.checksum==checksum(j);
+  return j.magic==0x3158524cUL && j.version==2 && j.nextId>0 && j.cursor<8 && j.checksum==checksum(j);
 }
 // strtoul saturates at ULONG_MAX on overflow, which equals UINT32_MAX on the
 // radios but not on the 64-bit host. Validate before multiplying on every CPU.
@@ -64,6 +81,7 @@ class Receiver {
   bool expiredKnown[CAPACITY]={};
   uint8_t expiredCursor=0;
   uint32_t lease=0, leaseUntil=0, saveRetry=0;
+  bool rich=false, formatLocked=false;
   bool storageOK=true, storageBlocked=false;
   static bool reached(uint32_t now,uint32_t at) {return int32_t(now-at)>=0;}
   void expireReservations(uint32_t now) {
@@ -92,7 +110,7 @@ class Receiver {
   void reply(const uint8_t* owner,const char* verb,uint32_t tx,uint32_t fish,bool aquarium=false,bool cancelled=false) {
     char msg[80]; uint32_t unused=0,timeout=0;
     snprintf(msg,sizeof(msg),"LFG1|%s|%lu|%lu%s",verb,(unsigned long)tx,(unsigned long)fish,
-        !strcmp(verb,"RETURN")?(cancelled?"|C|CANCEL1":aquarium?"|C|AQUARIUM1":"|C"):""); io.send(owner,msg,unused,timeout);
+        !strcmp(verb,"ACK")?"|S1":!strcmp(verb,"RETURN")?(cancelled?"|C|CANCEL1":aquarium?"|C|AQUARIUM1":"|C"):""); io.send(owner,msg,unused,timeout);
   }
   int reusable() const {
     for(int i=0;i<CAPACITY;++i) if(data.slots[i].state==Empty)return i;
@@ -107,7 +125,7 @@ class Receiver {
  public:
   Journal data{};
   explicit Receiver(IO& backend):io(backend) {
-    data.magic=0x3158524cUL;data.version=1;data.nextId=1;
+    data.magic=0x3158524cUL;data.version=2;data.nextId=1;
   }
   bool begin(const Journal* saved,uint32_t now,bool allowFresh=true) {
     if(!saved && !allowFresh){storageBlocked=true;storageOK=false;return false;}
@@ -126,8 +144,9 @@ class Receiver {
     if(!text || strncmp(text,"LFG1|",5))return false;
     expireReservations(now);
     char buf[160]; if(strlen(text)>=sizeof(buf))return true;
-    strcpy(buf,text); char* fields[10]={}; size_t n=0; char* context=nullptr;
-    for(char* p=strtok_r(buf,"|",&context);p && n<10;p=strtok_r(nullptr,"|",&context))fields[n++]=p;
+    strcpy(buf,text); char* fields[18]={}; size_t n=0; fields[n++]=buf;
+    for(char* p=buf;*p;++p)if(*p=='|') { *p=0; if(n==18)return true; fields[n++]=p+1; }
+    for(size_t i=0;i<n;++i)if(!*fields[i])return true;
     if(n<4)return true;
     uint32_t tx=0,fish=0;
     if(!parseUnsigned(fields[2],UINT32_MAX,tx) || !parseUnsigned(fields[3],UINT32_MAX,fish))return true;
@@ -167,11 +186,23 @@ class Receiver {
     if(!strcmp(fields[1],"COMMIT")) {
       if(s.state>=Delivered || s.attempts) {reply(owner,"RETURN",tx,fish,capturedDurably[index]);return true;}
       if(s.state==Reserved) {
-        if(n==9 && (fields[4][0]=='C' || fields[4][0]=='M') && !fields[4][1]) {
-          uint32_t values[4]={};bool good=true;
-          for(int k=0;k<4;k++)if(!parseUnsigned(fields[k+5],k==3?65535U:6U,values[k]))good=false;
-          if(good){s.mode=fields[4][0];s.body=values[0];s.scales=values[1];s.eyes=values[2];s.tint=values[3];s.appearance=1;}
+        Slot candidate=s;
+        if(n!=4) {
+          if(n<9 || (fields[4][0]!='C' && fields[4][0]!='M') || fields[4][1])return true;
+          uint32_t values[4]={};
+          for(int k=0;k<4;k++)if(!parseUnsigned(fields[k+5],k==3?65535U:6U,values[k]))return true;
+          candidate.mode=fields[4][0];candidate.body=values[0];candidate.scales=values[1];candidate.eyes=values[2];candidate.tint=values[3];candidate.appearance=1;
+          size_t k=9;
+          if(k<n && !strcmp(fields[k],"H1")) {
+            if(k+3>=n)return true;
+            for(int g=0;g<3;g++){uint32_t v;if(!parseUnsigned(fields[k+1+g],247,v) || v==7)return true;candidate.genes[g]=v;}
+            candidate.presence|=2;k+=4;
+          }
+          if(k<n && !strcmp(fields[k],"P1")) { uint32_t v;if(k+1>=n || !parseUnsigned(fields[k+1],2,v))return true;candidate.panel=v;candidate.presence|=4;k+=2; }
+          if(k<n && !strcmp(fields[k],"S1")) { uint32_t v;if(k+1>=n || !parseUnsigned(fields[k+1],65535,v))return true;candidate.species=v;candidate.presence|=1;k+=2; }
+          if(k!=n)return true;
         }
+        s=candidate;
         s.id=data.nextId++;s.state=Captured;due[index]=now+HOLD_MS;
         if(!persist()) {due[index]=now;return true;} // no ARRIVED without durable snapshot
       }
@@ -208,14 +239,17 @@ class Receiver {
     }
     return false;
   }
-  uint16_t event(uint32_t id,uint8_t* out) const {
+  uint16_t event(uint32_t id,uint8_t* out,bool water=false) const {
     for(const auto& s:data.slots)if(s.state>=Captured) {
       if(id==s.id) {
         size_t p=0;out[p++]=1;put32(out+p,id);p+=4;memcpy(out+p,s.owner,32);p+=32;
         put32(out+p,s.fish);p+=4;put32(out+p,s.tx);p+=4;
         out[p++]=s.stage;out[p++]=s.mode;out[p++]=s.body;out[p++]=s.scales;out[p++]=s.eyes;
         out[p++]=s.tint;out[p++]=s.tint>>8;out[p++]=s.appearance;
-        memcpy(out+p,s.name,24);p+=24;return p;
+        memcpy(out+p,s.name,24);p+=24;
+        if(water){out[0]=3;out[p++]=s.presence;out[p++]=s.species;out[p++]=s.species>>8;
+          for(int g=0;g<3;g++)out[p++]=s.genes[g];out[p++]=s.panel;}
+        return p;
       }
       if(id==s.statusId && s.state>=Delivered) {
         out[0]=2;put32(out+1,id);put32(out+5,s.id);out[9]=s.state==Delivered?1:2;out[10]=s.attempts;return 11;
@@ -237,11 +271,12 @@ class Receiver {
     if(!len || in[0]!=COMMAND)return 0;
     out[0]=COMMAND;out[1]='R';out[2]='X';out[3]=VERSION;out[4]=len>4?in[4]:255;out[5]=1;
     if(len<9 || in[1]!='R' || in[2]!='X' || in[3]!=VERSION)return 6;
-    static constexpr uint8_t sizes[]={9,10,9,15,13,9,13};
+    static constexpr uint8_t sizes[]={9,10,9,15,13,9,13,10};
     if(in[4]>=sizeof(sizes) || len!=sizes[in[4]])return 6;
     uint32_t token=u32(in+5);if(!token)return 6;
     if(lease && lease!=token && !reached(now,leaseUntil)){out[5]=2;return 6;}
     if(in[4]!=0 && (lease!=token || reached(now,leaseUntil)))return 6;
+    if(!lease || reached(now,leaseUntil)){rich=false;formatLocked=false;}
     lease=token;leaseUntil=now+15000;out[5]=0;
     switch(in[4]) {
       case 0:out[6]=CAPACITY;out[7]=transports;out[8]=10;out[9]=storageOK;return 10;
@@ -252,12 +287,12 @@ class Receiver {
       }
       case 2: {
         if(!storageOK){out[5]=3;return 6;}
-        uint32_t id=nextEvent();uint8_t buf[80];uint16_t size=event(id,buf);
+        formatLocked=true;uint32_t id=nextEvent();uint8_t buf[84];uint16_t size=event(id,buf,rich);
         put32(out+6,id);out[10]=size;out[11]=size>>8;return 12;
       }
       case 3: {
         if(!storageOK){out[5]=3;return 6;}
-        if(len!=15)break;uint8_t buf[80];uint16_t size=event(u32(in+9),buf);
+        if(len!=15)break;formatLocked=true;uint8_t buf[84];uint16_t size=event(u32(in+9),buf,rich);
         uint16_t offset=uint16_t(in[13])|uint16_t(in[14])<<8;if(!size || offset>=size)break;
         uint16_t count=size-offset;if(count>10)count=10;
         out[6]=offset;out[7]=offset>>8;out[8]=size;out[9]=size>>8;memcpy(out+10,buf+offset,count);return 10+count;
@@ -271,7 +306,8 @@ class Receiver {
         }
         break;
       }
-      case 5:lease=0;return 6;
+      case 5:lease=0;rich=false;formatLocked=false;return 6;
+      case 7:if(formatLocked || in[9]!=1)break;rich=true;out[6]=1;return 7;
       // Explicit operator retry of an unresolved RETURN; upload identity unchanged.
       case 6: {
         if(len!=13)break;uint32_t id=u32(in+9);

@@ -38,7 +38,7 @@ int main(int argc,char** argv){
     r.receive(owner,"LFG1|REQ|1|9999999999999999999999999999|2|Overflow",0);
     assert(io.sent.empty());
     r.receive(owner,"LFG1|REQ|4294967295|4294967295|3|Maximum",0);
-    assert(io.sent.back()=="LFG1|ACK|4294967295|4294967295");
+    assert(io.sent.back()=="LFG1|ACK|4294967295|4294967295|S1");
     PASS("CPU-width-independent unsigned limits, overflow/sign rejection and maximum-ID intake");
   }
   {
@@ -81,7 +81,7 @@ int main(int argc,char** argv){
   }
   {
     Fake io;lrx::Receiver r(io);r.begin(nullptr,0);r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);
-    io.fail=true;r.receive(owner,"LFG1|COMMIT|7|8|C|1|3|5|2016",1);assert(!r.healthy() && io.sent.back()=="LFG1|ACK|7|8");
+    io.fail=true;r.receive(owner,"LFG1|COMMIT|7|8|C|1|3|5|2016",1);assert(!r.healthy() && io.sent.back()=="LFG1|ACK|7|8|S1");
     r.tick(1);assert(io.sent.back()=="LFG1|RETURN|7|8|C");assert(command(r,0)[5]==0 && command(r,2)[5]==3);
     io.fail=false;r.tick(5001);assert(r.healthy());assert(command(r,2,{},1,5001)[5]==0);
     PASS("storage failure prevents ARRIVED/export, still returns original; bounded recovery restores outbox");
@@ -189,6 +189,28 @@ int main(int argc,char** argv){
     r.receive(owner,"LFG1|REQ|7|8|2|Fish",start+2*lrx::RESERVE_MS);
     assert(r.data.slots[0].state==lrx::Reserved);
     PASS("reservation expires at ingress without tick across clock wrap; cancellation tombstone lifetime bounded");
+  }
+  {
+    Fake io;lrx::Receiver r(io);assert(r.begin(nullptr,0));
+    r.receive(owner,"LFG1|REQ|7|8|2|Fish",0);assert(io.sent.back()=="LFG1|ACK|7|8|S1");
+    r.receive(other,"LFG1|COMMIT|7|8|C|1|2|3|44|S1|55",1);assert(!r.nextEvent());
+    const char* bad[]={"LFG1|COMMIT|7|8|C|1|2|3|44|H1|7|8|9", "LFG1|COMMIT|7|8|C|1|2|3|44|S1|65536", "LFG1|COMMIT|7|8|C|1|2|3|44|S1|1|", "LFG1|COMMIT|7|8|C|1||3|44"};
+    for(auto text:bad){r.receive(owner,text,2);assert(!r.nextEvent());}
+    r.receive(owner,"LFG1|COMMIT|7|8|C|1|2|3|44|H1|8|247|6|P1|2|S1|65535",3);
+    assert(r.nextEvent() && r.data.slots[0].presence==7 && r.data.slots[0].species==65535);
+    r.receive(owner,"LFG1|COMMIT|7|8",4);assert(r.data.slots[0].species==65535);
+    lrx::Receiver reboot(io);assert(reboot.begin(&io.saved,5));
+    uint8_t data[84];assert(reboot.event(reboot.nextEvent(),data)==77);
+    assert(command(reboot,0,{},1,5)[5]==0);assert(command(reboot,7,{1},1,6)[5]==0);
+    auto sum=command(reboot,2,{},1,7);assert(sum[10]==84 && sum[11]==0);
+    assert(command(reboot,7,{1},1,8)[5]==1);
+    auto eid=reboot.nextEvent();auto args=id(eid);args.push_back(0);args.push_back(0);
+    auto part=command(reboot,3,args,1,9);assert(part[10]==3);
+    assert(reboot.event(eid,data,true)==84 && data[77]==7 && data[78]==255 && data[79]==255 && data[80]==8 && data[81]==247 && data[83]==2);
+    reboot.tick(10);assert(io.sent.back()=="LFG1|RETURN|7|8|C|AQUARIUM1");
+    assert(command(reboot,5,{},1,11)[5]==0);assert(command(reboot,0,{},2,12)[5]==0);
+    sum=command(reboot,2,{},2,13);assert(sum[10]==77);
+    PASS("Water strict parse, full identity, durable metadata, lease negotiation, legacy downgrade and offline return");
   }
   std::cout<<cases<<" production-core scenarios passed\n";
 }

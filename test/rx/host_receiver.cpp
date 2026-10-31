@@ -12,7 +12,7 @@ int main(){
   for(uint8_t i=1;i<=2;i++){
     key[0]=i;uint32_t now=(i-1)*6000;
     receiver.receive(key,"LFG1|REQ|7|8|2|Host fixture",now);
-    receiver.receive(key,"LFG1|COMMIT|7|8|C|1|3|5|2016",now+1);
+    receiver.receive(key,i==1?"LFG1|COMMIT|7|8|C|1|3|5|2016|H1|8|247|6|P1|2|S1|65535":"LFG1|COMMIT|7|8|C|1|3|5|2016",now+1);
     receiver.tick(now+4001);receiver.acknowledgeRadio(backend.hash);
   }
   int lead;
