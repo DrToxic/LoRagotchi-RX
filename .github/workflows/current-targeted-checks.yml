@@ -1,0 +1,57 @@
+name: Targeted current RX production integration checks
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.sha }}
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - run: pip install platformio==6.1.19
+    - name: Production receiver fault tests
+      run: 'mkdir -p .local-dev
+
+        python3 test/ble/check_pairing_pin.py
+
+        g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -I . test/rx/check_receiver.cpp -o .local-dev/check_receiver
+
+        .local-dev/check_receiver
+
+        g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -I . test/rx/check_journal.cpp -o .local-dev/check_journal
+
+        .local-dev/check_journal
+
+        python3 test/rx/check_targets.py
+
+        python3 test/rx/check_paper.py
+
+        python3 test/rx/check_channel_notice.py
+
+        '
+    - uses: actions/checkout@v4
+      with:
+        repository: DrToxic/LoRagotchi-Aquarium
+        ref: c00e9fca691a0e2a97e74b4a9a77cf9c64842b98
+        path: .local-dev/aquarium
+    - name: Pinned Aquarium Water and LRX protocol integration
+      run: python3 test/rx/check_aquarium.py .local-dev/aquarium
+    - name: Tank repeater protocol and retained-flash guard
+      run: 'python3 test/rx/check_repeater.py pio .local-dev/aquarium
+
+        python3 test/rx/check_repeater_flash.py
+
+        '
+    - run: pio test -e native -e native_kiss_modem
+    timeout-minutes: 20
+'on':
+  push:
+    branches:
+    - fix/current-ci-20261101
+  workflow_dispatch: {}
+concurrency:
+  group: current-rx-${{ github.ref }}
+  cancel-in-progress: true
