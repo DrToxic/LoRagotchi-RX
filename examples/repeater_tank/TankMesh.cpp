@@ -97,7 +97,9 @@ bool TankMesh::applicationText(Peer& peer, mesh::Packet* packet, const uint8_t* 
   size_t textLen = strnlen((char*)data + 5, len - 5);
   if (textLen < 5 || memcmp(data + 5, "LFG1|", 5)) return false;
   memcpy(text, data + 5, textLen); text[textLen] = 0;
+  requestContext = packet;
   receiver.receive(peer.id.pub_key, text, millis());
+  requestContext = nullptr;
   uint32_t hash;
   mesh::Utils::sha256((uint8_t*)&hash, 4, data, 5 + textLen, peer.id.pub_key, 32);
   if (packet->isRouteFlood()) {
@@ -162,7 +164,8 @@ bool TankMesh::send(const uint8_t* owner, const char* text, uint32_t& ack, uint3
   uint32_t airtime = _radio->getEstAirtimeFor(packet->getRawLength());
   if (peer.pathLen == 0xFF) {
     timeout = 500 + 16 * airtime;
-    sendTankFlood(packet);
+    if (requestContext) sendFloodReply(packet, 0, requestContext->getPathHashSize());
+    else sendTankFlood(packet);
   } else {
     timeout = 500 + (6 * airtime + 250) * ((peer.pathLen & 63) + 1);
     sendDirect(packet, peer.path, peer.pathLen);

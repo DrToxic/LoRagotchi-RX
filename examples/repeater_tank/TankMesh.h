@@ -13,6 +13,7 @@ class TankMesh : public MyMesh, public lrx::IO {
   } peers[PEERS];
   int matches[PEERS] = {}, stockMatches = 0, tankMatches = 0;
   unsigned cursor = 0;
+  mesh::Packet* requestContext = nullptr;
   bool pinned(const uint8_t* key) const;
   int remember(const mesh::Identity& id);
   bool applicationText(Peer&, mesh::Packet*, const uint8_t*, uint8_t*, size_t);

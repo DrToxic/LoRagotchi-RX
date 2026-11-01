@@ -19,7 +19,10 @@ LFG1 text reaches the existing production receiver. Other traffic from an existi
 ACL peer still reaches the stock admin handler exactly once. Same-prefix collisions
 are resolved by full-secret decryption, never names/short-prefix fallback. PATH
 packets learn return routes; reboot uses unknown routes and the default flood
-scope. Incoming flood ACK/path replies use the stock request scope. Application
+scope. Immediate LFG responses and flood ACK/path replies use the stock request
+scope. Configure the default flood scope to reach the owners after route loss or
+reboot; per-peer routes/scopes are not added to the unchanged durable journal.
+Cross-region recovery without a compatible default scope is not promised. Application
 output backpressure leaves capacity for normal forwarding/admin. Existing bounded
 return-attempt semantics, including failed enqueue attempts, remain unchanged.
 

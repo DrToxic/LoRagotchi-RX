@@ -62,6 +62,7 @@ int main(int argc,char**) {
   assert(!mesh.receiver.nextEvent()); // full key, not same-prefix/tx/fish binding
   mesh.text(a,"LFG1|COMMIT|7|8|C|1|2|3|65535|H1|220|120|6|S1|13");
   assert(mesh.receiver.nextEvent());assert(mesh.receiver.data.slots[1].species==13);
+  assert(mesh.defaultFloods==0 && mesh.scopedReplies>0); // immediate LFG responses use current request scope
   uint32_t snapshot=mesh.receiver.nextEvent();
   for(int i=10;i<70;++i)mesh.advert(key(i));
   assert(mesh.find(a)>=0 && mesh.find(admin)>=0); // active slots survive peer churn
