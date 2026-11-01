@@ -127,6 +127,14 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   File openAppend(const char* fname);
   bool isLooped(const mesh::Packet* packet, const uint8_t max_counters[]);
 
+#ifdef LORAGOTCHI_REPEATER_TANK
+protected:
+  // Asynchronous application returns use the configured default scope, never
+  // the scope of whichever unrelated packet happened to arrive most recently.
+  void sendTankFlood(mesh::Packet* packet) {
+    sendFloodScoped(default_scope, packet, 0, _prefs.path_hash_mode + 1);
+  }
+#endif
 protected:
   float getAirtimeBudgetFactor() const override {
     return _prefs.airtime_factor;

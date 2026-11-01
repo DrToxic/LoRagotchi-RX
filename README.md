@@ -1,5 +1,9 @@
 # LoRagotchi-RX
 
+For the new **stock repeater + USB/BLE/onboard-Wi-Fi tank connector**, see
+[REPEATER-TANK.md](REPEATER-TANK.md). The companion products below are retained
+unchanged; repeater profiles have separate explicit targets and LRX-only management.
+
 Receiver companion firmware for [LoRagotchi Aquarium](https://github.com/DrToxic/LoRagotchi-Aquarium).
 Derived from [DrToxic/LoRagotchi-DX](https://github.com/DrToxic/LoRagotchi-DX),
 with LoRagotchi DX by Robert Rayner / M0YNW and the MeshCore transport by

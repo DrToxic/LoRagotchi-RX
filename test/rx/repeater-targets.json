@@ -1,0 +1,50 @@
+[
+  {
+    "environment": "Heltec_v3_LoRagotchi_Repeater_usb",
+    "board": "Heltec_v3",
+    "transport": "usb",
+    "source_environment": "Heltec_v3_repeater"
+  },
+  {
+    "environment": "Heltec_v3_LoRagotchi_Repeater_ble",
+    "board": "Heltec_v3",
+    "transport": "ble",
+    "source_environment": "Heltec_v3_repeater"
+  },
+  {
+    "environment": "Heltec_v3_LoRagotchi_Repeater_wifi",
+    "board": "Heltec_v3",
+    "transport": "wifi",
+    "source_environment": "Heltec_v3_repeater"
+  },
+  {
+    "environment": "heltec_v4_LoRagotchi_Repeater_usb",
+    "board": "heltec_v4",
+    "transport": "usb",
+    "source_environment": "heltec_v4_repeater"
+  },
+  {
+    "environment": "heltec_v4_LoRagotchi_Repeater_ble",
+    "board": "heltec_v4",
+    "transport": "ble",
+    "source_environment": "heltec_v4_repeater"
+  },
+  {
+    "environment": "heltec_v4_LoRagotchi_Repeater_wifi",
+    "board": "heltec_v4",
+    "transport": "wifi",
+    "source_environment": "heltec_v4_repeater"
+  },
+  {
+    "environment": "Heltec_t096_LoRagotchi_Repeater_usb",
+    "board": "Heltec_t096",
+    "transport": "usb",
+    "source_environment": "Heltec_t096_repeater"
+  },
+  {
+    "environment": "Heltec_t096_LoRagotchi_Repeater_ble",
+    "board": "Heltec_t096",
+    "transport": "ble",
+    "source_environment": "Heltec_t096_repeater"
+  }
+]

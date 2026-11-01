@@ -6,6 +6,17 @@ responses/push codes do not use this signature. This is not an upstream MeshCore
 registered opcode. Require the full `70 52 58 01` signature and version; stock
 firmware rejection is not an RX capability. Debug Serial text is never an event.
 
+## Repeater endpoint capability
+
+Stock-repeater tank profiles keep LRX/1 and all Water/legacy event formats. Their
+HELLO link flags add bit 0x80 = LRX-only (not the companion/admin API), alongside
+1 USB / 2 BLE / 4 onboard Wi-Fi. Updated clients must suppress companion inbox,
+chat and configuration commands for this role. Wi-Fi uses the existing LRXB/HMAC
+bridge authentication contract before framed LRX/1, not anonymous TCP. The
+15-second consumer token remains arbitration, not authentication. See
+[REPEATER-TANK.md](../REPEATER-TANK.md) for board, discovery and security limits.
+Legacy companion profiles/capabilities are unchanged.
+
 ## Carrier and consumer
 
 - USB/TCP: existing MeshCore `< uint16-le-length payload` client framing and
