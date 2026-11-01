@@ -54,7 +54,8 @@ struct LocalIdentity : Identity {
 struct Packet {
   uint8_t path[64] = {}, path_len = 0, target[32] = {};
   uint8_t extraType = 0; uint32_t ack = 0; std::vector<uint8_t> payload;
-  bool flood = true;
+  bool flood = true, doNotRetransmit = false;
+  void markDoNotRetransmit() { doNotRetransmit = true; }
   bool isRouteFlood() const { return flood; }
   uint8_t getPathHashSize() const { return 1; }
   size_t getRawLength() const { return payload.size()+10; }

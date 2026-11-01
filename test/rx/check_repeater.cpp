@@ -71,7 +71,10 @@ int main(int argc,char**) {
   assert(std::string((char*)returned.payload.data()+5,returned.payload.size()-5).find("AQUARIUM1")!=std::string::npos);
   assert(mesh.defaultFloods>0); // no tank ever connected
   uint32_t hash=0;mesh::Utils::sha256((uint8_t*)&hash,4,returned.payload.data(),returned.payload.size(),mesh.self_id.pub_key,32);
-  mesh.onAckRecv(nullptr,hash);assert(mesh.receiver.data.slots[1].state==lrx::Delivered);
+  mesh::Packet acknowledged, unrelated;
+  mesh.onAckRecv(&unrelated,hash ^ 1);assert(!unrelated.doNotRetransmit);
+  mesh.onAckRecv(&acknowledged,hash);assert(acknowledged.doNotRetransmit);
+  assert(mesh.receiver.data.slots[1].state==lrx::Delivered);
   assert(mesh.receiver.nextEvent()==snapshot); // return does not remove the copy
   uint32_t ack=123,timeout=0;mesh.busy(4);assert(!mesh.send(a.pub_key,"test",ack,timeout)&&ack==123);
   mesh.busy(0);mesh.noPackets=true;assert(!mesh.send(a.pub_key,"test",ack,timeout));mesh.noPackets=false;

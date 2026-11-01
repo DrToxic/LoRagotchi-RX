@@ -22,7 +22,9 @@ protected:
   void onAdvertRecv(mesh::Packet*, const mesh::Identity&, uint32_t, const uint8_t*, size_t) override;
   void onPeerDataRecv(mesh::Packet*, uint8_t, int, const uint8_t*, uint8_t*, size_t) override;
   bool onPeerPathRecv(mesh::Packet*, int, const uint8_t*, uint8_t*, uint8_t, uint8_t, uint8_t*, uint8_t) override;
-  void onAckRecv(mesh::Packet*, uint32_t hash) override { receiver.acknowledgeRadio(hash); }
+  void onAckRecv(mesh::Packet* packet, uint32_t hash) override {
+    if (receiver.acknowledgeRadio(hash) && packet) packet->markDoNotRetransmit();
+  }
 public:
   lrx::Receiver receiver;
   TankMesh(mesh::MainBoard& board, mesh::Radio& radio, mesh::MillisecondClock& ms,
