@@ -144,6 +144,11 @@ responsibility. Do not disclose the inherited CLI's password reply in logs.
 ## Storage, migration and acceptance limits
 
 Journal filenames/regions match RX: ESP32 SPIFFS, nRF ExtraFS at 0xD4000/0x19000.
+The stock nRF linker permits code up to 0xED000, overlapping that ExtraFS range.
+New T096 profiles add an ELF post-link guard: every flash LOAD byte must remain
+in [0x26000,0xD4000), including initialized RAM data's flash load address. This
+preserves the stock linker/board layout while failing any future oversized image
+before it can be mistaken for a safe update. Test: python3 test/rx/check_repeater_flash.py
 No autoformat. Invalid journals block intake/export while stock admin/forwarding
 continues. A failed nRF ExtraFS mount likewise leaves the identity-bearing stock
 repeater running with unhealthy LRX storage. A primary identity-filesystem mount
