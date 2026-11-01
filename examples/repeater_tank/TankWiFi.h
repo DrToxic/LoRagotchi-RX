@@ -49,6 +49,13 @@ public:
   // Changes apply on reboot, so provisioning cannot reset an active return.
   bool configure(const char* command, char* response) {
     if (strncmp(command, "tank ", 5)) return false;
+    if (!strcmp(command, "tank status")) {
+      const bool connected = enabled && WiFi.status() == WL_CONNECTED;
+      snprintf(response, 160, "Tank WiFi %s; IP %s; LRXB port 8765",
+               !enabled ? "disabled" : connected ? "connected" : "connecting",
+               connected ? WiFi.localIP().toString().c_str() : "unavailable");
+      return true;
+    }
     Preferences prefs;
     if (!prefs.begin("lrx-net", false)) { strcpy(response, "Tank settings unavailable"); return true; }
     bool ok = false;

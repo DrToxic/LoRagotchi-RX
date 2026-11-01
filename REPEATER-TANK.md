@@ -114,6 +114,7 @@ Use a private physical USB console (values are never echoed or returned):
 - tank token YOUR_64_HEX_DIGIT_TOKEN (32 random bytes, hex input)
 - tank wifi on, then deliberately reboot to apply
 - tank wifi off, then reboot to disable without erasing the journal
+- tank status reports enabled/association state and the DHCP IP without secrets
 
 Credentials live in **unencrypted ESP32 NVS**, namespace lrx-net, never source/history.
 Do not provision through a shared/recorded console. This task creates no credential.
