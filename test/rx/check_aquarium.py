@@ -61,6 +61,7 @@ with tempfile.TemporaryDirectory(prefix='loragotchi-rx-test-') as directory:
     client = Client(transport, store, token=45)
     try:
         assert client.connect() == dict(capacity=4, transports=1, storage_ok=True)
+        assert client.water
         try:
             client.poll()
         except RuntimeError as exc:
@@ -78,6 +79,9 @@ with tempfile.TemporaryDirectory(prefix='loragotchi-rx-test-') as directory:
         assert store.db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 4
         assert store.db.execute('SELECT COUNT(*) FROM returns WHERE status="delivery-confirmed"').fetchone()[0] == 2
         assert all((fish.body, fish.scales, fish.eyes) == (1, 3, 5) for fish in store.roster())
+        fish = sorted(store.roster(), key=lambda f: f.owner)
+        assert fish[0].species_id == 65535 and fish[0].body_gene == 8 and fish[0].panel == 2
+        assert not fish[1].species_present and not fish[1].genes_present
         client.poll_messages()
         assert len(store.roster()) == 2
         print('PASS fragmented LRX/1 handshake/read, two owners, durable replay without clones')

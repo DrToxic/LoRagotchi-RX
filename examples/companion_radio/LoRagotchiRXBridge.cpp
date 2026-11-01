@@ -29,6 +29,16 @@ struct Files : lrx::JournalFiles {
     file.close();
     return ok;
   }
+  bool readV1(unsigned bank, lrx::JournalV1& journal) override {
+    auto file=store.openRead(filesystem(),paths[bank]);if(!file)return false;
+    bool ok=file.size()==sizeof(journal) && file.read(reinterpret_cast<uint8_t*>(&journal),sizeof(journal))==sizeof(journal);
+    file.close();return ok;
+  }
+  bool header(unsigned bank,uint32_t& magic,uint32_t& version) override {
+    auto file=store.openRead(filesystem(),paths[bank]);if(!file)return false;
+    uint32_t h[2]={};bool ok=file.read(reinterpret_cast<uint8_t*>(h),sizeof(h))==sizeof(h);file.close();
+    magic=h[0];version=h[1];return ok;
+  }
   bool write(unsigned bank, const lrx::Journal& journal) override {
 #if defined(NRF52_PLATFORM)
     // Adafruit FILE_O_WRITE does not truncate. Remove only the inactive bank.
