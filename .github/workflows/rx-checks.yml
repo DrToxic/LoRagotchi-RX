@@ -29,10 +29,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: DrToxic/LoRagotchi-Aquarium
-          ref: c5e51755db035792f38e1a7c803079776f960916
+          ref: c00e9fca691a0e2a97e74b4a9a77cf9c64842b98  # Water + LRX-only repeater support
           path: .local-dev/aquarium
-      - name: Aquarium v0.1.5 protocol integration
+      - name: Pinned Aquarium Water and LRX protocol integration
         run: python3 test/rx/check_aquarium.py .local-dev/aquarium
+      - name: Tank repeater protocol and retained-flash guard
+        run: |
+          python3 test/rx/check_repeater.py pio .local-dev/aquarium
+          python3 test/rx/check_repeater_flash.py
       - run: pio test -e native -e native_kiss_modem
   build:
     runs-on: ubuntu-latest

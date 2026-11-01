@@ -14,7 +14,7 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 aquarium = Path(sys.argv[1] if len(sys.argv) > 1 else root.parent / 'loragotchi-community-tank').resolve()
 if not (aquarium / 'tank/client.py').exists():
-    raise SystemExit('Pass the path to a LoRagotchi-Aquarium v0.1.5 checkout')
+    raise SystemExit('Pass the path to the Water-capable LoRagotchi-Aquarium checkout pinned in rx-checks.yml')
 sys.path.insert(0, str(aquarium))
 from tank.client import Client
 from tank.protocol import decode_event, encode_event
