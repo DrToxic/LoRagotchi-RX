@@ -7,6 +7,7 @@ hardware. The mock hash is not cryptographic or on-air verification.
 """
 from pathlib import Path
 import json
+import hashlib
 import subprocess
 import sys
 import tempfile
@@ -78,10 +79,16 @@ with tempfile.TemporaryDirectory(prefix='lrx-repeater-') as directory:
 
 # Stock routing/admin remains the exact accepted stable source, with only one
 # compile-guarded protected default-scope send hook for asynchronous returns.
-stock=subprocess.check_output(['git','show','bf20da1:examples/simple_repeater/MyMesh.cpp'],cwd=root)
-assert (root/'examples/simple_repeater/MyMesh.cpp').read_bytes()==stock
-for folder in ('src','variants/heltec_v3','variants/heltec_v4','variants/heltec_t096'):
-    assert not subprocess.check_output(['git','diff','bf20da1','--',folder],cwd=root)
+assert hashlib.sha256((root/'examples/simple_repeater/MyMesh.cpp').read_bytes()).hexdigest()==\
+    '41d69ff530c0a4dc6b7dfb611511af62f1467c82d5ccf4730f9d800fe4fa321f'
+expected={'src': '7dca137a8d473e7e4cb1a8bdafb77b97313b61e2fb7e0473e62486f9db6852d6', 'variants/heltec_v3': '275e943a810db7b32585fc5f09ef40f1f23e0a2ed2c6179a47d4c8cc86c8c8cd', 'variants/heltec_v4': '88bc87963808fc1f03c34ed4edf96ed8d407c4ca144c640e9aff782c2aa5f8b5', 'variants/heltec_t096': 'fdb52c7097dc370b0191dc1af617ca19dc98a8e5f15fdbed6e6e2f03b0f86d14'}
+for folder, wanted in expected.items():
+    digest=hashlib.sha256()
+    for path in sorted((root/folder).rglob('*')):
+        if path.is_file():
+            digest.update(path.relative_to(root).as_posix().encode()+b'\0')
+            digest.update(path.read_bytes()+b'\0')
+    assert digest.hexdigest()==wanted,folder
 print('PASS stock repeater implementation, shared MeshCore and original board/RF/partition sources unchanged')
 
 if len(sys.argv)>1:
