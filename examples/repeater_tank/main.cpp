@@ -1,5 +1,9 @@
 #include <Arduino.h>   // needed for PlatformIO
 #include <Mesh.h>
+#ifdef LRX_TANK_WIFI
+// Keep the framework NVS dependency visible to PlatformIO's chain LDF.
+#include <Preferences.h>
+#endif
 
 #include "TankMesh.h"
 #include "TankLinks.h"
